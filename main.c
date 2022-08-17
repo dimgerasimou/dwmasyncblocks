@@ -28,7 +28,7 @@ static int screen;
 static void (*writestatus) () = setroot;
 
 static char outputs[LENGTH(blocks)][CMDLENGTH * 4 + 1 + CLICKABLE_BLOCKS];
-static char statusbar[2][LENGTH(blocks) * (LENGTH(outputs[0]) - 1) + (LENGTH(blocks) - 1 + leadingdelimiter) * (LENGTH(DELIMITER) - 1) + 1];
+static char statusbar[2][LENGTH(blocks) * (LENGTH(outputs[0]) - 1) + (LENGTH(blocks) - 1 + LEADING_DELIMITER) * (LENGTH(DELIMITER) - 1) + 1];
 
 void
 debug()
@@ -48,7 +48,7 @@ getstatus(char *str, char *strold)
 	str[0] = '\0';
 	
 	for (int i = 0; i < LENGTH(blocks); i++) {
-		if (leadingdelimiter) {
+		if (LEADING_DELIMITER) {
 			if (strlen(outputs[i]))
 				strcat(str, DELIMITER);
 		} else {
@@ -97,7 +97,7 @@ int
 main(int argc, char* argv[])
 {
 	/* Handle command line arguments */
-	for (int i = 0; i < argc; i++) {
+	for (int i = 1; i < argc; i++) {
 		if (!strcmp("-h", argv[i]) || !strcmp("--help", argv[i])) {
 			printhelp();
 			return 0;
