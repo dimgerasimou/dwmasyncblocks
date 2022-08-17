@@ -7,7 +7,7 @@
 #define LENGTH(X)    (sizeof(X) / sizeof(X[0]))
 
 typedef const struct {
-	const char *command;
+	const char* command;
 	const unsigned int interval;
 	const unsigned int signal;
 } Block;
@@ -16,13 +16,13 @@ typedef const struct {
 
 /* Functions */
 void debug();
-int getstatus(char *str, char *last);
+int getstatus(char* str, char* last);
 void printhelp();
 void setroot();
 static int setupX();
 
 /* Variables */
-static Display *dpy;
+static Display* dpy;
 static Window root;
 static int screen;
 static void (*writestatus) () = setroot;
