@@ -65,9 +65,8 @@ printhelp() {
 	puts("This is a hackable status bar meant to be used with dwm.");
 	puts("To use, run in backround by typing \"dwmblocks &\" in the terminal.");
 	puts("Arguments:");
-	puts("\t--help    Prints this.");
-	puts("\t-h");
-	puts("\t--debug   Starts dwmblocks in debug mode.");
+	puts("\t-h    --help    Prints this.");
+	puts("\t-d    --debug   Starts dwmblocks in debug mode.");
 }
 
 int
@@ -101,7 +100,7 @@ main(int argc, char* argv[])
 		if (!strcmp("-h", argv[i]) || !strcmp("--help", argv[i])) {
 			printhelp();
 			return 0;
-		} else if (!strcmp("--debug", argv[i])) {
+		} else if (!strcmp("--debug", argv[i]) || !strcmp("-d", argv[i])) {
 			writestatus = debug;
 		} else {
 			fprintf(stderr, "dwmblocks: Invalid arguments.\n");
