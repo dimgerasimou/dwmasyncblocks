@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/epoll.h>
+#include <sys/signalfd.h>
 #include <unistd.h>
 #include <X11/Xlib.h>
 
@@ -36,6 +37,7 @@ static int pipes[LENGTH(blocks)][2];
 static unsigned short int proccessContinue = 1;
 static Window root;
 static int screen;
+static int signalFD;
 static int timertick = 0;
 static void (*writestatus) () = setroot;
 
@@ -117,6 +119,33 @@ setupsignals()
 	/* Termination signals */
 	signal(SIGINT, termhandler);
 	signal(SIGTERM, termhandler);
+
+	sigset_t handledsignals;
+	sigemptyset(&handledsignals);
+	sigaddset(&handledsignals, SIGUSR1);
+	sigaddset(&handledsignals, SIGALRM);
+
+	/* Append all block signals to `handledsignals` */
+	for (unsigned short i = 0; i < LENGTH(blocks); i++)
+		if (blocks[i].signal > 0)
+			sigaddset(&handledsignals, SIGRTMIN + blocks[i].signal);
+
+	/* Create a signal file descriptor for epoll to watch */
+	signalFD = signalfd(-1, &handledsignals, 0);
+	event.data.u32 = LENGTH(blocks);
+	epoll_ctl(epollfd, EPOLL_CTL_ADD, signalFD, &event);
+
+	/* Block all realtime and handled signals */
+	for (unsigned short i = SIGRTMIN; i <= SIGRTMAX; i++)
+		sigaddset(&handledsignals, i);
+	sigprocmask(SIG_BLOCK, &handledsignals, NULL);
+
+	/* Avoid zombie subprocesses */
+	struct sigaction sa;
+	sa.sa_handler = SIG_DFL;
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = SA_NOCLDWAIT;
+	sigaction(SIGCHLD, &sa, 0);
 }
 
 int
