@@ -1,5 +1,6 @@
 #include <signal.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/epoll.h>
 #include <sys/signalfd.h>
@@ -19,6 +20,9 @@ typedef const struct {
 #include "config.h"
 
 /* Functions */
+void closepipe(int* pipe);
+void execblock(int i, const char* button);
+void execblocks(unsigned int time);
 int gcd(int a, int b);
 int getstatus(char* str, char* last);
 void initialize();
@@ -26,25 +30,69 @@ void printhelp();
 void setroot();
 void setupsignals();
 static int setupX();
+void signalhandler();
+void statusloop();
 void termhandler();
+void termination();
+void updateblock(int i);
 
 /* Variables */
 static Display* dpy;
 static int epollfd;
 static struct epoll_event event;
+static int execlock = 0;
 static int maxinterval = 1;
 static int pipes[LENGTH(blocks)][2];
-static unsigned short int proccessContinue = 1;
+static unsigned short int proccesscontinue = 1;
 static Window root;
 static int screen;
 static int signalFD;
+static int timer = 0;
 static int timertick = 0;
 static void (*writestatus) () = setroot;
 
 static char outputs[LENGTH(blocks)][CMDLENGTH * 4 + 1 + CLICKABLE_BLOCKS];
 static char statusbar[2][LENGTH(blocks) * (LENGTH(outputs[0]) - 1) + (LENGTH(blocks) - 1 + LEADING_DELIMITER) * (LENGTH(DELIMITER) - 1) + 1];
 
-int gcd(int a, int b) {
+void
+closepipe(int* pipe)
+{
+	close(pipe[0]);
+	close(pipe[1]);
+}
+
+void
+execblock(int i, const char* button)
+{
+	/* Ensure only one child process exists per block at an instance */
+	if (execlock & 1 << i)
+		return;
+	/* Lock execution of block until current instance finishes execution */
+	execlock |= 1 << i;
+
+	if (fork() == 0) {
+		close(pipes[i][0]);
+		dup2(pipes[i][1], STDOUT_FILENO);
+		close(pipes[i][1]);
+
+		if (button)
+			setenv("BLOCK_BUTTON", button, 1);
+		execl("/bin/sh", "sh", "-c", blocks[i].command, (char*)NULL);
+		exit(EXIT_FAILURE);
+	}
+}
+
+void
+execblocks(unsigned int time)
+{
+	for (int i = 0; i < LENGTH(blocks); i++)
+		if (time == 0 || (blocks[i].interval != 0 && time % blocks[i].interval == 0))
+			execblock(i, NULL);
+}
+
+int
+gcd(int a, int b)
+{
 	int temp;
 	while (b > 0) {
 		temp = a % b;
@@ -91,6 +139,9 @@ initialize()
 	}
 
 	setupsignals();
+
+	/* Initialize Blocks */
+	raise(SIGALRM);
 }
 
 void
@@ -161,9 +212,118 @@ setupX()
 }
 
 void
+signalhandler()
+{
+	struct signalfd_siginfo info;
+	read(signalFD, &info, sizeof(info));
+	unsigned int signal = info.ssi_signo;
+
+	switch (signal) {
+	case SIGALRM:
+		/* Schedule the next timer event and execute blocks */
+		alarm(timertick);
+		execblocks(timer);
+
+		/* Wrap `timer` to the interval [1, `maxInterval`] */
+		timer = (timer + timertick - 1) % maxinterval + 1;
+		return;
+	case SIGUSR1:
+		/* Update all blocks on receiving SIGUSR1 */
+		execblocks(0);
+		return;
+	}
+
+	for (int j = 0; j < LENGTH(blocks); j++) {
+		if (blocks[j].signal == signal - SIGRTMIN) {
+			char button[] = {'0' + info.ssi_int & 0xff, 0};
+			execblock(j, button);
+			break;
+		}
+	}
+}
+
+void
+statusloop()
+{
+	struct epoll_event events[LENGTH(blocks) + 1];
+
+	while (proccesscontinue) {
+		int eventCount = epoll_wait(epollfd, events, LENGTH(events), -1);
+		for (int i = 0; i < eventCount; i++) {
+			unsigned short id = events[i].data.u32;
+			if (id < LENGTH(blocks))
+				updateblock(id);
+			else
+				signalhandler();
+		}
+
+		if (eventCount != -1)
+			writestatus();
+	}
+}
+
+void
 termhandler()
 {
-	proccessContinue = 0;
+	proccesscontinue = 0;
+}
+
+void
+termination()
+{
+	XCloseDisplay(dpy);
+	close(epollfd);
+	close(signalFD);
+	for (int i = 0; i < LENGTH(pipes); i++)
+		closepipe(pipes[i]);
+}
+
+void
+updateblock(int i)
+{
+	char* output = outputs[i];
+	char buffer[LENGTH(outputs[0]) - CLICKABLE_BLOCKS];
+	int bytesRead = read(pipes[i][0], buffer, LENGTH(buffer));
+
+	/* Trim UTF-8 string to desired length */
+	int count = 0, j = 0;
+	while (buffer[j] != '\n' && count < CMDLENGTH) {
+		count++;
+
+		/* Skip continuation bytes, if any */
+		char ch = buffer[j];
+		int skip = 1;
+		while ((ch & 0xc0) > 0x80)
+			ch <<= 1, skip++;
+		j += skip;
+	}
+
+	/* Cache last character and replace it with a trailing space */
+	char ch = buffer[j];
+	buffer[j] = ' ';
+
+	/* Trim trailing spaces */
+	while (j >= 0 && buffer[j] == ' ')
+		j--;
+	buffer[j + 1] = 0;
+
+	/* Clear the pipe */
+	if (bytesRead == LENGTH(buffer)) {
+		while (ch != '\n' && read(pipes[i][0], &ch, 1) == 1)
+			;
+	}
+
+#if CLICKABLE_BLOCKS
+	if (bytesRead > 1 && blocks[i].signal > 0) {
+		output[0] = blocks[i].signal;
+		output++;
+	}
+#endif
+
+	strcpy(output, buffer);
+
+	/* Remove execution lock for the current block */
+	execlock &= ~(1 << i);
 }
 
 int
@@ -188,6 +348,9 @@ main(int argc, char* argv[])
 
 	initialize();
 
+	statusloop();
+
+	termination();
+
 	return 0;
 }
-		
