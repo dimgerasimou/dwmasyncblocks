@@ -10,6 +10,7 @@
 const Block blocks[] = {
 	/*Command                  Update Interval   Update Signal */
 	{ SCRIPTPATH("volume"),    0,                10 },
+	{ SCRIPTPATH("weather"),   3600,             6  },
 	{ SCRIPTPATH("memory"),    6,                0  },
 	{ SCRIPTPATH("internet"),  5,                1  },
 	{ SCRIPTPATH("battery"),   5,                2  },

@@ -4,7 +4,7 @@
 
 int main() {
     time_t currentTime = time(NULL);
-    struct tm * localTime;
+    struct tm* localTime;
 
     localTime = localtime(&currentTime);
 

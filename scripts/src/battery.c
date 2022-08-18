@@ -9,16 +9,20 @@ int main() {
 	FILE * fp;
 	fp = fopen("/sys/class/power_supply/BAT1/capacity", "r");
 	
-	if (fp == NULL)
+	if (fp == NULL) {
 		puts("NULL");
+		return 1;
+	}
 
 	fscanf(fp, "%d", &capacity);
 	fclose(fp);
 
 	fp = fopen("/sys/class/power_supply/BAT1/status", "r");
 
-	if (fp == NULL)
+	if (fp == NULL) {
 		puts("NULL");
+		return 1;
+	}
 
 	fscanf(fp, "%s", status);
 	fclose(fp);

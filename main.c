@@ -313,12 +313,12 @@ updateblock(int i)
 			;
 	}
 
-#if CLICKABLE_BLOCKS
-	if (bytesRead > 1 && blocks[i].signal > 0) {
-		output[0] = blocks[i].signal;
-		output++;
+	if (CLICKABLE_BLOCKS) {
+		if (bytesRead > 1 && blocks[i].signal > 0) {
+			output[0] = blocks[i].signal;
+			output++;
+		}
 	}
-#endif
 
 	strcpy(output, buffer);
 
