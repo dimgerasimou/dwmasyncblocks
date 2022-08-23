@@ -2,7 +2,7 @@
 #include <string.h>
 #include <unistd.h>
 
-void parsestring (char* string) {
+void parsestring(char* string) {
 	char temp[128];
 	for (unsigned short i = 16; i < strlen(string); i++)
 		temp[i-16] = string[i];
@@ -10,10 +10,23 @@ void parsestring (char* string) {
 	sscanf(temp, "%s", string);
 }
 
-int main() {
+void geticon(char* icon, char* string) {
+	if (strstr(string, "Sunny") != 0)
+		strcpy(icon, "☀");
+	if (strstr(string, "Cloudy") != 0)
+		strcpy(icon, "☁");
+	if (strstr(string, "Patchy rain") != 0)
+		strcpy(icon, "🌦");
+	if (strstr(string, "Partly cloudy") != 0)
+		strcpy(icon, "⛅");
+}
+
+
+int main(void) {
 	FILE* fp = popen("/bin/curl -sf \"https://wttr.in/Thessaloniki?0QTA\"", "r");
 	char input[128];
 	char forecast[64];
+	char icon[4] = "\0";
 	int celsius;
 
 	if (fp == NULL) {
@@ -22,6 +35,7 @@ int main() {
 	}
 
 	fgets(input, sizeof(input), fp);
+	geticon(icon, input);
 	parsestring(input);
 	strcpy(forecast, input);
 	
@@ -30,8 +44,10 @@ int main() {
 	sscanf(input, "%d", &celsius);
 
 	pclose(fp);
-
-	printf("%s, %d°C\n", forecast, celsius);
+	if (icon[0] != '\0')
+		printf("%s %d°C\n", icon, celsius);
+	else
+		printf("%s, %d°C\n", forecast, celsius);
 
 	return 0;
 }
