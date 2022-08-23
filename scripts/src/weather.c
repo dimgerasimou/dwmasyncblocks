@@ -7,18 +7,26 @@ void parsestring(char* string) {
 	for (unsigned short i = 16; i < strlen(string); i++)
 		temp[i-16] = string[i];
 	temp[strlen(string) - 16] = '\0';
-	sscanf(temp, "%s", string);
+	sscanf(temp, "%[^\n]s", string);
 }
 
 void geticon(char* icon, char* string) {
 	if (strstr(string, "Sunny") != 0)
 		strcpy(icon, "☀");
+	if (strstr(string, "rain") != 0 || strstr(string, "Rain") != 0)
+		strcpy(icon, "🌧");
 	if (strstr(string, "Cloudy") != 0)
 		strcpy(icon, "☁");
 	if (strstr(string, "Patchy rain") != 0)
 		strcpy(icon, "🌦");
 	if (strstr(string, "Partly cloudy") != 0)
 		strcpy(icon, "⛅");
+	if (strstr(string, "Thunderstorm") != 0 || strstr(string, "thunderstorm") != 0)
+		strcpy(icon, "🌩");
+	if (strstr(string, "rain with thunderstorm") != 0 || strstr(string, "Patchy light rain") != 0)
+		strcpy(icon, "⛈");
+
+
 }
 
 
