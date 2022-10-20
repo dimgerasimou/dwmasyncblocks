@@ -1,7 +1,7 @@
 #ifndef CONFIGURATION
 #define CONFIGURATION
 
-#define CLICKABLE_BLOCKS 1
+#define CLICKABLE_BLOCKS 0
 #define LEADING_DELIMITER 0
 #define DELIMITER " | "
 
