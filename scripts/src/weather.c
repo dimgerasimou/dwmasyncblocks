@@ -11,7 +11,7 @@ void parsestring(char* string) {
 }
 
 void geticon(char* icon, char* string) {
-	if (strstr(string, "Sunny") != 0)
+	if (strstr(string, "Sunny") != 0 || strstr(string, "Clear") != 0)
 		strcpy(icon, "☀");
 	if (strstr(string, "rain") != 0 || strstr(string, "Rain") != 0)
 		strcpy(icon, "🌧");
