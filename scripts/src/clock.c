@@ -5,12 +5,10 @@
 
 int main() {
     time_t currentTime = time(NULL);
-    struct tm* localTime;
-
-    localTime = localtime(&currentTime);
+    struct tm* localTime = localtime(&currentTime);
 	char month[16];
 
-    switch(localTime->tm_mon) {
+    switch(++localTime->tm_mon) {
 		case 1:	strcpy(month, "Jan");
 				break;
 		case 2:	strcpy(month, "Feb");
