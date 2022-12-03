@@ -10,8 +10,8 @@
 
 # Global variables ---------------------------------------------------
 
-compiledScripts="battery clock internet kernel keyboard volume weather"
-coloredScripts="memory"
+compiledScripts=""
+coloredScripts="memory volume internet keyboard battery kernel clock date"
 dependencyList="networkmanager pamixer"
 configDirectory="$HOME/.local/bin/statusbar"
 
