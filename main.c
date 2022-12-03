@@ -7,7 +7,7 @@
 #include <unistd.h>
 #include <X11/Xlib.h>
 
-#define CMDLENGTH    50
+#define CMDLENGTH    70
 #define LENGTH(X)    (sizeof(X) / sizeof(X[0]))
 #define MAX(a, b)    (a > b ? a : b)
 

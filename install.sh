@@ -10,7 +10,8 @@
 
 # Global variables ---------------------------------------------------
 
-compiledScripts="battery clock internet kernel keyboard memory volume weather"
+compiledScripts="battery clock internet kernel keyboard volume weather"
+coloredScripts="memory"
 dependencyList="networkmanager pamixer"
 configDirectory="$HOME/.local/bin/statusbar"
 
@@ -54,6 +55,11 @@ function copyScripts {
 
 	for script in $compiledScripts; do
 		gcc -O2 -o scripts/$script scripts/src/$script.c 1> log.txt 2> log.txt
+		mv scripts/$script $configDirectory/$script 1> /dev/null 2> log.txt
+	done
+
+	for script in $coloredScripts; do
+		gcc -O2 -o scripts/$script scripts/color/$script.c 1> log.txt 2> log.txt
 		mv scripts/$script $configDirectory/$script 1> /dev/null 2> log.txt
 	done
 }

@@ -3,7 +3,7 @@
 
 #define CLICKABLE_BLOCKS 0
 #define LEADING_DELIMITER 0
-#define DELIMITER " | "
+#define DELIMITER "  "
 
 #define SCRIPTPATH(SCRIPTNAME) "$HOME/.local/bin/statusbar/" #SCRIPTNAME
 
