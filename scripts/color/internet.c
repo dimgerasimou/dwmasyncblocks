@@ -28,7 +28,7 @@ int main() {
     	fscanf(fp, "%s", input);
     	fclose(fp);
     	if(!strcmp(input, "up")){
-        	strcpy(icon, " ");
+        	strcpy(icon, "");
     	}else
         	strcpy(icon, "睊");
 	}
