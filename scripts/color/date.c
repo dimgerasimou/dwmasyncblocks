@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include "colorscheme.h"
 
 int main() {
     time_t currentTime = time(NULL);
@@ -58,7 +59,7 @@ int main() {
 	}
 
 
-	printf("^b#44475a^^c#f8f8f2^  ^b#ffb86c^^c#282A36^ %s, %d %s ^d^\n", day, localTime->tm_mday, month);
+	printf(SFG SBG"  "NFG NBG" %s, %s %d ^d^\n", day, month, localTime->tm_mday);
 
     return 0;
 }

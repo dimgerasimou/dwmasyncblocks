@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/utsname.h>
+#include "colorscheme.h"
 
 int main() {
 	struct utsname buffer;
@@ -13,7 +14,7 @@ int main() {
 
 	release = strtok(buffer.release, "-");
 
-	printf("^b#44475a^^c#f8f8f2^ 🐧 ^b#dfb86c^^c#282A36^ %s ^d^\n", release);
+	printf(SFG SBG" 🐧 "NFG NBG" %s ^d^\n", release);
 	
 	return 0;
 }

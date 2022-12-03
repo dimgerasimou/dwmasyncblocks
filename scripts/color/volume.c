@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include "colorscheme.h"
 
 FILE* opencmd(char* cmd) {
 	FILE* pointer;
@@ -47,8 +48,8 @@ int main() {
 
 
 	if (volmuted)
-		printf("^d^^b#44475a^^c#f8f8f2^ %s ^d^\n", volicon);
+		printf(SFG SBG" %s ^d^\n", volicon);
 	else
-		printf("^d^^b#44475a^^c#f8f8f2^ %s ^b#8be9fd^^c#282A36^ %d%% ^d^\n", volicon, vol);
+		printf(SFG SBG" %s "NBG NFG" %d%% ^d^\n", volicon, vol);
 	return 0;
 }

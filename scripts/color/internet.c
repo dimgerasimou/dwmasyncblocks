@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include "colorscheme.h"
 
 int main() {
     /* Get the proper icon */
@@ -59,8 +60,8 @@ int main() {
     /* Print the final string */
 
     if (found)
-        printf("^b#44475a^^c#f8f8f2^ %s ^b#50fa7b^^c#282A36^ %s ^d^\n", icon, ipadress);
+        printf(SFG SBG" %s "NBG NFG" %s ^d^\n", icon, ipadress);
 	else
-		printf("^b#44475a^^c#f8f8f2^ %s ^d^\n", icon);
+		printf(SFG SBG" %s ^d^\n", icon);
     return 0;
 }
