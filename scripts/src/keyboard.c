@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include "colorscheme.h"
 
 int main() {
 	FILE* fp = popen("/bin/setxkbmap -query", "r");
@@ -21,11 +22,12 @@ int main() {
 		}
 	}
 	
-	if (found) {
+	if (found)
 		sscanf(input, "%s %s", lang, lang);
-		printf("⌨ %s\n", lang);
-	} else
-		printf("error\n");
+	else
+		strcpy(lang, "Error!");
+	
+	printf(SFG SBG" ⌨ "NFG NBG" %s ^d^\n", lang);
 	
 	pclose(fp);
 	return 0;

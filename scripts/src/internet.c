@@ -1,12 +1,13 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include "colorscheme.h"
 
 int main() {
     /* Get the proper icon */
     FILE* fp;
     char input[128];
-    char wifiicon[6];
+    char icon[6];
     char ethon = 0;
 
     fp = fopen("/sys/class/net/enp4s0/operstate", "r");
@@ -17,21 +18,20 @@ int main() {
     fscanf(fp, "%s", input);
     fclose(fp);
     if(!strcmp(input, "up")) {
-        ethon = 1;
-    }
-
-    fp = fopen("/sys/class/net/wlo1/operstate", "r");
-    if (fp == NULL) {
-        puts("Network error.");
-        return 0;
-    }
-    fscanf(fp, "%s", input);
-    fclose(fp);
-    if(!strcmp(input, "up")){
-        strcpy(wifiicon, "  ");
-    }else
-        strcpy(wifiicon, "睊 ");
-    
+        strcpy(icon, ""); 
+    } else {
+    	fp = fopen("/sys/class/net/wlo1/operstate", "r");
+    	if (fp == NULL) {
+        	puts("Network error.");
+        	return 0;
+    	}
+    	fscanf(fp, "%s", input);
+    	fclose(fp);
+    	if(!strcmp(input, "up")){
+        	strcpy(icon, "");
+    	}else
+        	strcpy(icon, "睊");
+	}
     
     /* Get ip adress */
     char temp[32];
@@ -58,14 +58,10 @@ int main() {
     }
 
     /* Print the final string */
-    if (ethon)
-        printf(" ");
-    
-    printf("%s", wifiicon);
 
     if (found)
-        printf("%s", ipadress);
-
-    printf("\n");
+        printf(SFG SBG" %s "NBG NFG" %s ^d^\n", icon, ipadress);
+	else
+		printf(SFG SBG" %s ^d^\n", icon);
     return 0;
 }

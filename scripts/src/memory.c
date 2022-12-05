@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <string.h>
-
+#include "colorscheme.h"
 int main() {
 	FILE* fp = popen("/bin/free -m", "r");
 	char buffer[256];
@@ -16,12 +16,8 @@ int main() {
 	fgets(buffer, sizeof(buffer), fp);
 	fclose(fp);
 	sscanf(buffer, "%s %d %d", temp, &memused, &memused);
-
-	if (memused > 1024) {
-		printf("  %.1lf GiB\n", (double)(memused) / 1024.0);
-	} else {
-		printf("  %d MiB\n", memused);
-	}
+	
+	printf(SFG SBG"  "NFG NBG" %.1f GiB ^d^\n", (double)(memused) / 1024.0);
 
 	return 0;
 }

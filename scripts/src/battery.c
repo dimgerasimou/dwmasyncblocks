@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+#include "colorscheme.h"
 
 int main() {
 	int capacity;
@@ -71,7 +72,7 @@ int main() {
 			strcpy(icon, "");
 	}
 
-	printf("%s %d%%\n", icon, capacity);
+	printf(SBG SFG" %s "NBG NFG" %d%% ^d^\n", icon, capacity);
 
 	return 0;
 }
