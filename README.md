@@ -10,7 +10,7 @@ Additionaly, the following packages need to be installed to work with the script
 - wireplumber or pamixer
 - networkmanager
 
-If you use pipewire make sure wireplumber is selected in in the install script, else if you use pulseaudio change pipewire to pamixer in the script:
+If you use pipewire make sure wireplumber is selected in in the install script, else if you use pulseaudio change wireplumber to pamixer in the script:
 
 `/install.sh`
 
