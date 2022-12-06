@@ -7,9 +7,29 @@ It differs from other dwmblocks builds by executing the blocks asynchronously, t
 
 In order to build dwmblocks the Xlib header files are needed.  
 Additionaly, the following packages need to be installed to work with the scripts:
-- wireplumber
+- wireplumber or pamixer
 - networkmanager
 
+If you use pipewire make sure wireplumber is selected in in the install script, else if you use pulseaudio change pipewire to pamixer in the script:
+
+`/install.sh`
+
+---
+```bash
+...
+dependencyList="networkmanager wireplumber"
+...
+```
+to
+
+`/install.sh`
+
+---
+```bash
+...
+dependencyList="networkmanager pamixer"
+...
+```
 ## Installation
 
 dwmblocks can be installed using the provided `install.sh` script.  

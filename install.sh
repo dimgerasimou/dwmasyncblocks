@@ -10,8 +10,8 @@
 
 # Global variables ---------------------------------------------------
 
-compiledScripts="memory volume internet keyboard battery kernel clock date"
-dependencyList="networkmanager wireplumber"
+compiledScripts="memory internet keyboard battery kernel clock date volume"
+dependencyList="networkmanager wireplumber"                                 # If using pulseuadio change wireplumber to pamixer.
 configDirectory="$HOME/.local/bin/statusbar"
 
 # Functions ----------------------------------------------------------
@@ -56,6 +56,11 @@ function copyScripts {
 		gcc -O2 -o scripts/$script scripts/src/$script.c 1> log.txt 2> log.txt
 		mv scripts/$script $configDirectory/$script 1> /dev/null 2> log.txt
 	done
+
+	if [ "${dependencyList:15}" == "pamixer" ]; then
+		gcc -O2 -o scripts/volume scripts/src/volume-pa.c 1> log.txt 2> log.txt
+		mv scripts/volume $configDirectory/volume 1> /dev/null 2> log.txt
+	fi
 }
 
 function dependencyCheck {
