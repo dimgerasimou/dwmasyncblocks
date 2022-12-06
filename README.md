@@ -13,18 +13,14 @@ Additionaly, the following packages need to be installed to work with the script
 If you use pipewire make sure wireplumber is selected in in the install script, else if you use pulseaudio change wireplumber to pamixer in the script:
 
 `/install.sh`
-
----
 ```bash
 ...
 dependencyList="networkmanager wireplumber"
 ...
 ```
-to
+to:
 
 `/install.sh`
-
----
 ```bash
 ...
 dependencyList="networkmanager pamixer"
