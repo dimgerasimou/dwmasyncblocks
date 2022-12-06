@@ -20,6 +20,8 @@ Alternetively you can use make in the `build/` directory to just compile and ins
 sudo make install
 ```
 
+Additionally, your wm must be able to support colored emoji and color in the output.
+In dwm this can be achived with the [status2d patch](https://dwm.suckless.org/patches/status2d/ 'dwm.suckless.org/patches/status2d/') and the usage of a ttf font. See [my dwm build](https://github.com/dimgerasimou/dwm 'github.com/dimgerasimou/dwm'). 
 ## Usage
 
 Blocks can be defined to run in `build/config.h` file, and any executable that prints to stdout can be ran.  
