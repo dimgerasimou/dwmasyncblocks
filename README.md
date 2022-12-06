@@ -1,7 +1,7 @@
 # dwmblocks
 
-This is a status bar designed to work with the sucklless dwm.  
-It differs from other dwmblock builds by executing the blocks asynchronously, thus not having the effect of blocks disappearing if they are late on updating.
+This is a status bar designed to work with the suckless dwm.  
+It differs from other dwmblocks builds by executing the blocks asynchronously, thus not having the effect of blocks disappearing if they are late on updating.
 
 ## Requirments
 
