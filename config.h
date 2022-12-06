@@ -16,7 +16,7 @@ const Block blocks[] = {
 	{ SCRIPTPATH("keyboard"),  0,                3  },
 	{ SCRIPTPATH("kernel"),    360,              4  },
 	{ SCRIPTPATH("date"),      300,              6  },
-	{ SCRIPTPATH("clock"),     1,                5  },
+	{ SCRIPTPATH("time"),      1,                5  },
 };
 
 #endif /* ifndef CONFIGURATION */

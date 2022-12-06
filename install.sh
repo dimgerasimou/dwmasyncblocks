@@ -10,7 +10,7 @@
 
 # Global variables ---------------------------------------------------
 
-compiledScripts="memory internet keyboard battery kernel clock date volume"
+compiledScripts="memory internet keyboard battery kernel time date volume"
 dependencyList="networkmanager wireplumber"                                 # If using pulseuadio change wireplumber to pamixer.
 configDirectory="$HOME/.local/bin/statusbar"
 
