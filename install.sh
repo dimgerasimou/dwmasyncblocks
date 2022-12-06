@@ -11,7 +11,7 @@
 # Global variables ---------------------------------------------------
 
 compiledScripts="memory volume internet keyboard battery kernel clock date"
-dependencyList="networkmanager pamixer"
+dependencyList="networkmanager wireplumber"
 configDirectory="$HOME/.local/bin/statusbar"
 
 # Functions ----------------------------------------------------------
