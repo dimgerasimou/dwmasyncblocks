@@ -5,7 +5,7 @@
 #define LEADING_DELIMITER 0
 #define DELIMITER ""
 
-#define SCRIPTPATH(SCRIPTNAME) "$HOME/.local/bin/statusbar/" #SCRIPTNAME
+#define SCRIPTPATH(SCRIPTNAME) "$HOME/.local/bin/dwmblocks/" #SCRIPTNAME
 
 const Block blocks[] = {
 	/*Command                  Update Interval   Update Signal */
