@@ -77,10 +77,24 @@ function buildScripts {
 	
 	for script in $SCRIPTS; do
 		$CC $SCRIPTSCFLAGS -o $BIN/$script $SSRC/$script.c
+		if (( $? != 0 )); then
+			echo "Failed to compile $script."
+			if [ -e log.txt ]; then
+				rm log.txt
+			fi
+			exit 1
+		fi
 	done
 
 	if [ $USEPULSEAUDIO == 1 ]; then
 		$CC $SCRIPTSCFLAGS -o $BIN/volume $SSRC/volume-pa.c
+		if (( $? != 0 )); then
+			echo "Failed to compile volume-pa."
+			if [ -e log.txt ]; then
+				rm log.txt
+			fi
+		fi
+		exit 1
 	fi
 }
 
@@ -97,6 +111,13 @@ function copyScripts {
 function buildDwmblocks {
 	mkdir -p $BIN 1> /dev/null 2> log.txt
 	$CC -o $BIN/dwmblocks $SRC/main.c $CFLAGS $LDFLAGS
+	if (( $? != 0 )); then
+		echo "Failed to compile dwmblocks."
+		if [ -e log.txt ]; then
+			rm log.txt
+		fi
+		exit 1
+	fi
 }
 
 function installDwmblocks {
@@ -166,9 +187,9 @@ fi
 if [[ -s log.txt ]]; then
 		echo "Finished with errors."
 		exit 1
-	else
-		if [ -e log.txt ]; then
-			rm log.txt
-		fi
-		echo "Done!"
+else
+	if [ -e log.txt ]; then
+		rm log.txt
+	fi
+	echo "Done!"
 fi
