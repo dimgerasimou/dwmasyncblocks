@@ -235,7 +235,7 @@ signalhandler()
 
 	for (int j = 0; j < LENGTH(blocks); j++) {
 		if (blocks[j].signal == signal - SIGRTMIN) {
-			char button[] = {'0' + info.ssi_int & 0xff, 0};
+			char button[] = {('0' + info.ssi_int) & 0xff, 0};
 			execblock(j, button);
 			break;
 		}

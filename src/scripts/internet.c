@@ -8,7 +8,6 @@ int main() {
     FILE* fp;
     char input[128];
     char icon[6];
-    char ethon = 0;
 
     fp = fopen("/sys/class/net/enp4s0/operstate", "r");
     if (fp == NULL) {

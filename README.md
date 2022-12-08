@@ -10,29 +10,18 @@ Additionaly, the following packages need to be installed to work with the script
 - wireplumber or pamixer
 - networkmanager
 
-If you use pulseaudio change wireplumber to pamixer in the install script:
+If you use pulseaudio change USEPULSEAUDIO=0 to 1 in the install script.
+Alternatively tou can pass the `pulseaudio` argument in the install script.
 
-`/install.sh`
-```bash
-...
-dependencyList="networkmanager wireplumber"
-...
-```
-to:
-
-`/install.sh`
-```bash
-...
-dependencyList="networkmanager pamixer"
-...
-```
 ## Installation
 
 dwmblocks can be installed using the provided `install.sh` script.  
-This will build dwmblocks and additionally copy the blocks' scripts to `~/.local/bin/statusbar`.
+This will build dwmblocks and additionally copy the blocks' scripts to `~/.local/bin/dwmblocks`.
+With the help argument you can see every argument that can be passed.
 
 Alternetively you can use make to just compile and install dwmblocks:
 ```bash
+cd src
 sudo make install
 ```
 
@@ -55,10 +44,11 @@ Everytime the `config.h` file is editted, dwmblocks must be (re)compiled.
 
 To uninstall you can just use the install script with an uninstall modifier:
 ```bash
-./install.sh --uninstall
+./install.sh uninstall
 ```
 Alternetively you can use make to uninstall the binary
 ```bash
+cd src
 sudo make uninstall
 ```
 or remove it manualy
@@ -67,5 +57,5 @@ sudo rm -f /usr/local/bin/dwmblocks
 ```
 and then remove the block scripts with
 ```bash
-rm -rf ~/.local/bin/statusbar/
+rm -rf ~/.local/bin/dwmblocks/
 ```

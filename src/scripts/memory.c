@@ -14,7 +14,7 @@ int main() {
 
 	fgets(buffer, sizeof(buffer), fp);
 	fgets(buffer, sizeof(buffer), fp);
-	fclose(fp);
+	pclose(fp);
 	sscanf(buffer, "%s %d %d", temp, &memused, &memused);
 	
 	printf(SFG SBG"  "NFG NBG" %.1f GiB ^d^\n", (double)(memused) / 1024.0);
