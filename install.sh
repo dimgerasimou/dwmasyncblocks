@@ -93,8 +93,8 @@ function buildScripts {
 			if [ -e log.txt ]; then
 				rm log.txt
 			fi
+			exit 1
 		fi
-		exit 1
 	fi
 }
 
