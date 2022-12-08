@@ -11,7 +11,7 @@ Additionaly, the following packages need to be installed to work with the script
 - networkmanager
 
 If you use pulseaudio change USEPULSEAUDIO=0 to 1 in the install script.
-Alternatively tou can pass the `pulseaudio` argument in the install script.
+Alternatively you can pass the `pulseaudio` argument in the install script.
 
 ## Installation
 
