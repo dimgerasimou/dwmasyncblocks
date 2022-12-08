@@ -51,11 +51,8 @@ Alternetively you can use make to uninstall the binary
 cd src
 sudo make uninstall
 ```
-or remove it manualy
+or remove it manualy and then remove the block scripts:
 ```bash
 sudo rm -f /usr/local/bin/dwmblocks
-```
-and then remove the block scripts with
-```bash
 rm -rf ~/.local/bin/dwmblocks/
 ```
