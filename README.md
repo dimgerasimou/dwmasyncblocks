@@ -6,27 +6,13 @@ It differs from other dwmblocks builds by executing the blocks asynchronously, t
 ## Requirments
 
 In order to build dwmblocks the Xlib header files are needed.  
-Additionaly, the following packages need to be installed to work with the scripts:
-- wireplumber or pamixer
-- networkmanager
-
-If you use pulseaudio change USEPULSEAUDIO=0 to 1 in the install script.
-Alternatively you can pass the `pulseaudio` argument in the install script.
 
 ## Installation
 
-dwmblocks can be installed using the provided `install.sh` script.  
-This will build dwmblocks and additionally copy the blocks' scripts to `~/.local/bin/dwmblocks`.
-With the help argument you can see every argument that can be passed.
-
-Alternetively you can use make to just compile and install dwmblocks:
+Use make to just compile and install dwmblocks:
 ```bash
-cd src
-sudo make install
+sudo make clean install
 ```
-
-Additionally, your wm must be able to support colored emoji and color in the output.
-In dwm this can be achived with the [status2d patch](https://dwm.suckless.org/patches/status2d/ 'dwm.suckless.org/patches/status2d/') and the usage of a ttf font. See [my dwm build](https://github.com/dimgerasimou/dwm 'github.com/dimgerasimou/dwm'). 
 
 ## Usage
 
@@ -42,17 +28,7 @@ Everytime the `config.h` file is editted, dwmblocks must be (re)compiled.
 
 ## Uninstallation
 
-To uninstall you can just use the install script with an uninstall modifier:
+Use make to uninstall the binary
 ```bash
-./install.sh uninstall
-```
-Alternetively you can use make to uninstall the binary
-```bash
-cd src
 sudo make uninstall
-```
-or remove it manualy and then remove the block scripts:
-```bash
-sudo rm -f /usr/local/bin/dwmblocks
-rm -rf ~/.local/bin/dwmblocks/
 ```

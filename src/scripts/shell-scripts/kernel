@@ -1,3 +1,0 @@
-#!/bin/sh
-
-printf " %s\n" "$(uname -srm | awk '{print $2}' | cut -f1 -d "-")"
