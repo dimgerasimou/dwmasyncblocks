@@ -2,7 +2,7 @@
 #define CONFIGURATION
 
 #define CLICKABLE_BLOCKS 1
-#define LEADING_DELIMITER 0
+#define LEADING_DELIMITER 1
 #define DELIMITER "  "
 
 #define SCRIPTPATH(SCRIPTNAME) "$HOME/.local/bin/dwmblocks/" #SCRIPTNAME
@@ -16,8 +16,9 @@ const Block blocks[] = {
 	{ SCRIPTPATH("date"),      300,              6  },
 	{ SCRIPTPATH("time"),      1,                5  },
 	{ SCRIPTPATH("battery"),   5,                2  },
+	{ SCRIPTPATH("spacer-0"),  0,                11 },
 	{ SCRIPTPATH("internet"),  5,                1  },
-	{ SCRIPTPATH("spacer"),    0,                11 },
+	{ SCRIPTPATH("spacer"),    0,                11 }
 };
 
 #endif /* ifndef CONFIGURATION */
