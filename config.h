@@ -10,7 +10,6 @@
 const Block blocks[] = {
 	/*Command                  Update Interval   Update Signal */
 	{ SCRIPTPATH("volume"),    0,                10 },
-	{ SCRIPTPATH("spacer-0"),  0,                13 },
 	{ SCRIPTPATH("memory"),    6,                12 },
 	{ SCRIPTPATH("keyboard"),  0,                3  },
 	{ SCRIPTPATH("kernel"),    360,              4  },
@@ -18,6 +17,7 @@ const Block blocks[] = {
 	{ SCRIPTPATH("time"),      1,                5  },
 	{ SCRIPTPATH("battery"),   5,                2  },
 	{ SCRIPTPATH("internet"),  5,                1  },
+	{ SCRIPTPATH("bluetooth"), 5,                15 },
 	{ SCRIPTPATH("power"),     0,                14 },
 	{ SCRIPTPATH("spacer"),    0,                11 }
 };

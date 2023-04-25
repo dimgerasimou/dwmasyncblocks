@@ -8,7 +8,7 @@
 #include <X11/Xlib.h>
 
 #define CMDLENGTH    70
-#define LENGTH(X)    (sizeof(X) / sizeof(X[0]))
+#define LENGTH(X)    (int)(sizeof(X) / sizeof(X[0]))
 #define MAX(a, b)    (a > b ? a : b)
 
 typedef const struct {
@@ -78,7 +78,7 @@ execblock(int i, const char* button)
 		if (button)
 			setenv("BLOCK_BUTTON", button, 1);
 		execl("/bin/sh", "sh", "-c", blocks[i].command, (char*)NULL);
-		exit(EXIT_FAILURE);
+		exit(EXIT_SUCCESS);
 	}
 }
 
@@ -133,7 +133,7 @@ initialize()
 		epoll_ctl(epollfd, EPOLL_CTL_ADD, pipes[i][0], &event);
 
 		if(blocks[i].interval) {
-			maxinterval = MAX(blocks[i].interval, maxinterval);
+			maxinterval = MAX((int)(blocks[i].interval), maxinterval);
 			timertick = gcd(blocks[i].interval, timertick);
 		}
 	}
