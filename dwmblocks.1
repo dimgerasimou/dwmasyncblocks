@@ -1,0 +1,43 @@
+.TH DWMBLOCKS 1 dwmblocks\-VERSION
+.SH NAME
+dwmblocks
+.SH SYNOPSIS
+.B dwmblocks
+.RB [ \-vh ]
+.SH DESCRIPTION
+dwmasyncblocks is an asynchronous status bar for dwm. It is partitioned in blocks,
+where each block runs asynchronusly (thus the bar does not "freeze" whenever a block
+takes time to update). It has clickable blocks, where using the environemnt variable
+"BLOCK_BUTTON", the scripts can respond to mouse clicks, giving you endless possibilities
+for customization. The blocks update either by the given period at the config.h file,
+or by giving dwmblocks the corresponding block signal (SIGRTMIN+signal_number).
+
+.SH OPTIONS
+.TP
+.B \-v
+prints version information to stderr, then exits.
+.TP
+.B \-h
+prints a help prompt to stdout, then exits.
+
+.SH USAGE
+To use dwmblocks is straightforward. You just need to start it on the background along dwm.
+.SH CUSTOMIZATION
+dwmblocks is customized by creating a custom config.h and (re)compiling the source
+code. This keeps it fast, secure and simple.
+.SH SIGNALS
+.TP
+.B SIGRTMIN + BLOCK_SIG_NO
+Updates the block with the corresponding signal number.
+.TP
+.b SIGUSR1
+Updates all blocks.
+.TP
+.B SIGTERM - 15
+Cleanly terminate the dwmblocks process.
+.SH SEE ALSO
+.BR dwmblocksctl (1),
+.BR dwm (1),
+.BR st (1),
+.SH BUGS
+Inform me of any bugs on the github page: https://github.com/dimgerasimou/dwmasyncblocks.git

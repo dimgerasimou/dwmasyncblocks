@@ -1,3 +1,14 @@
+/* See LICENSE file for copyright and license details.
+ *
+ * dwmblocksctl is just a helper for updating blocks, usefull
+ * when combined with commands that change the blocks' text,
+ * thus eliminating the need for them to constantly upgrade.
+ *
+ * It can send the corresponding update signal to dwm of a given
+ * block name, print the update signals along with the period and
+ * restart dwmblocks.
+ */
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>

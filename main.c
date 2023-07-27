@@ -1,3 +1,13 @@
+/* See LICENSE file for copyright and license details.
+ *
+ * dwmasyncblocks is an asynchronous status bar for dwm. It is partitioned in blocks,
+ * where each block runs asynchronusly (thus the bar does not "freeze" whenever a block
+ * takes time to update). It has clickable blocks, where using the environemnt variable
+ * "BLOCK_BUTTON", the scripts can respond to mouse clicks, giving you endless possibilities
+ * for customization. The blocks update either by the given period at the config.h file,
+ * or by giving dwmblocks the corresponding block signal (SIGRTMIN+signal_number).
+ */
+
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -334,9 +344,12 @@ main(int argc, char* argv[])
 		if (!strcmp("-h", argv[i]) || !strcmp("--help", argv[i])) {
 			printhelp();
 			return 0;
-		} else {
+		} else if (!strcmp("-v", argv[i])) {
+			fprintf(stderr, "dwmblocks-version:1.0\n");
+			return 0;
+		}else {
 			fprintf(stderr, "dwmblocks: Invalid arguments.\n");
-			fprintf(stdout, "Use '-h' or \"--help\"\n");
+			fprintf(stderr, "Use '-h' or \"--help\"\n");
 			return 1;
 		}
 	}

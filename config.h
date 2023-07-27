@@ -1,5 +1,4 @@
-#ifndef CONFIGURATION
-#define CONFIGURATION
+/* See LICENSE file for copyright and license details. */
 
 #define CLICKABLE_BLOCKS 1
 #define LEADING_DELIMITER 0
@@ -21,5 +20,3 @@ const Block blocks[] = {
 	{ SCRIPTPATH("power"),     0,                14 },
 	{ SCRIPTPATH("spacer"),    0,                11 }
 };
-
-#endif /* ifndef CONFIGURATION */

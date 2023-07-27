@@ -1,0 +1,44 @@
+.TH DWMBLOCKSCTL 1 dwmblocksctl\-VERSION
+.SH NAME
+dwmblocksctl
+.SH SYNOPSIS
+.B dwmblocks
+.RB [ \-arth ]\ [ \-s\ block]
+.SH DESCRIPTION
+dwmblocksctl is just a helper for updating blocks, usefull
+when combined with commands that change the blocks' text,
+thus eliminating the need for them to constantly upgrade.
+.P
+It can send the corresponding update signal to dwm of a given
+block name, print the update signals along with the period and
+restart dwmblocks.
+
+.SH OPTIONS
+.TP
+.B \-a
+updates all blocks in dwmblocks.
+.TP
+.B \-r
+restarts dwmblocks.
+.TP
+.B \-t
+prints the blocks' name, update interval and update signal,
+to a table in stdout.
+.TP
+.B \-h
+prints a help prompt to stdout, then exits.
+.TP
+.B \-s [block]
+updates the block with it's name as a given argument.
+
+.SH EXAMPLE
+To update the block with the name volume, you just have to run `dwmblocksctl -s "volume"`.
+
+.SH USAGE
+To use dwmblocksctl just execute with the needed arguments.
+.SH SEE ALSO
+.BR dwmblocks (1),
+.BR dwm (1),
+.BR st (1),
+.SH BUGS
+Inform me of any bugs on the github page: https://github.com/dimgerasimou/dwmasyncblocks.git
