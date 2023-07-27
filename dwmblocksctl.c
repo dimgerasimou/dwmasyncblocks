@@ -172,6 +172,10 @@ pkill(char *name)
 			exit(EXIT_FAILURE);
 		}
 	}
+	if (!strcmp(name,"dwmblocks-all")) {
+		kill(dwmblocks_pID, SIGUSR1);
+		return;
+	}
 	if (!strcmp(name,"dwmblocks")) {
 		kill(dwmblocks_pID, SIGTERM);
 		return;
@@ -228,8 +232,7 @@ main(int argc, char *argv[])
 	structinit();
 	for (i = 1; i < argc; i++) {
 		if (!strcmp(argv[i], "-a")) {
-			for (int j = 0; j < LENGTH(blocks); j++)
-				pkill(cmds[j]);
+			pkill("dwmblocks-all");	
 		} else if (!strcmp(argv[i], "-r")) {
 			pkill("dwmblocks");
 			executedwmblocks();

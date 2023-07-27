@@ -16,6 +16,7 @@
 #include <sys/signalfd.h>
 #include <unistd.h>
 #include <X11/Xlib.h>
+#include <errno.h>
 
 #define CMDLENGTH    70
 #define LENGTH(X)    (int)(sizeof(X) / sizeof(X[0]))
@@ -74,13 +75,17 @@ closepipe(int* pipe)
 void
 execblock(int i, const char* button)
 {
+	pid_t pID;
 	/* Ensure only one child process exists per block at an instance */
 	if (execlock & 1 << i)
 		return;
 	/* Lock execution of block until current instance finishes execution */
 	execlock |= 1 << i;
-
-	if (fork() == 0) {
+	
+	pID = fork();
+	if (pID < 0) {
+		fprintf(stderr, "dwmblocks:execblock: fork() failed for block %d: %s\n", i, strerror(errno));
+	} else if (pID == 0) {
 		close(pipes[i][0]);
 		dup2(pipes[i][1], STDOUT_FILENO);
 		close(pipes[i][1]);
