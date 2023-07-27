@@ -345,7 +345,7 @@ main(int argc, char* argv[])
 			printhelp();
 			return 0;
 		} else if (!strcmp("-v", argv[i])) {
-			fprintf(stderr, "dwmblocks-version:1.0\n");
+			fprintf(stderr, "dwmblocks-1.0\n");
 			return 0;
 		}else {
 			fprintf(stderr, "dwmblocks: Invalid arguments.\n");
