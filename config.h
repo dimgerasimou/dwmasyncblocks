@@ -18,5 +18,4 @@ const Block blocks[] = {
 	{ SCRIPTPATH("battery"),   5,                2  },
 	{ SCRIPTPATH("bluetooth"), 5,                15 },
 	{ SCRIPTPATH("power"),     0,                14 },
-	{ SCRIPTPATH("spacer"),    0,                11 }
 };
