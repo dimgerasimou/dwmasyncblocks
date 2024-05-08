@@ -2,3 +2,5 @@
 *.o
 dwmblocks
 dwmblocksctl
+compile_commands.json
+.cache/**
