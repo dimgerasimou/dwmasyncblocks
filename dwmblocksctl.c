@@ -32,7 +32,7 @@ char cmds[LENGTH(blocks)][CMDLENGTH];
 static pid_t dwmblocks_pID = -1;
 
 void
-structinit()
+structinit(void)
 {
 	char temp[CMDLENGTH];
 	char *ptr;
@@ -65,7 +65,7 @@ getdigits(int num)
 }
 
 void
-structstat()
+structstat(void)
 {
 	int cmdl = 0, intl = 0, sigl = 0;
 	int cmdt, intt, sigt;
@@ -127,7 +127,7 @@ getsignalnum(char *name)
 }
 
 void
-getpidofdwmblocks()
+getpidofdwmblocks(void)
 {
 	struct dirent** proclist;
 	FILE *fp;
@@ -184,13 +184,13 @@ pkill(char *name)
 }
 
 void
-usage()
+usage(void)
 {
 	puts("usage: dwmblocksctl [-arth] [-s block]");
 }
 
 void
-executedwmblocks()
+executedwmblocks(void)
 {
 	pid_t pID;
 	pID = fork();
@@ -207,7 +207,7 @@ executedwmblocks()
 }
 
 void
-help()
+help(void)
 {
 	puts("Program that controls the dwmblocks status bar.");
 	puts("usage: dwmblocksctl [-arth] [-s block]");

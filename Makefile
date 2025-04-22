@@ -4,7 +4,7 @@
 PREFIX  := /usr/local
 MANPREFIX = ${PREFIX}/share/man
 CC      := cc
-CFLAGS  := -pedantic -Wall -Wno-deprecated-declarations -Os -c99
+CFLAGS  := -pedantic -Wall -Wno-deprecated-declarations -Os
 LDFLAGS := -lX11
 
 all: options dwmblocks dwmblocksctl
@@ -22,6 +22,9 @@ dwmblocks: main.c config.h
 dwmblocksctl: dwmblocksctl.c config.h
 	@echo making dwmblocksctl
 	@${CC} -o dwmblocksctl dwmblocksctl.c ${CFLAGS}
+
+config.h:
+	@cp config.def.h config.h
 
 clean:
 	@echo cleaning

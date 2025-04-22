@@ -1,8 +1,9 @@
 /* See LICENSE file for copyright and license details. */
 
-#define CLICKABLE_BLOCKS 1
-#define LEADING_DELIMITER 0
-#define DELIMITER ""
+#define CLICKABLE_BLOCKS 0
+#define LEADING_DELIMITER 1
+#define DELIMITER "|"
+#define TRIM_TRAILING_SPACES 1
 
 #define SCRIPTPATH(SCRIPTNAME) "$HOME/.local/bin/dwmblocks/" #SCRIPTNAME
 

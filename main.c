@@ -36,15 +36,15 @@ void execblock(int i, const char* button);
 void execblocks(unsigned int time);
 int gcd(int a, int b);
 int getstatus(char* str, char* last);
-void initialize();
-void printhelp();
-void setroot();
-void setupsignals();
-static int setupX();
-void signalhandler();
-void statusloop();
-void termhandler();
-void termination();
+void initialize(void);
+void printhelp(void);
+void setroot(void);
+void setupsignals(void);
+static int setupX(void);
+void signalhandler(void);
+void statusloop(void);
+void termhandler(int signum);
+void termination(void);
 void updateblock(int i);
 
 /* Variables */
@@ -60,7 +60,7 @@ static int screen;
 static int signalFD;
 static int timer = 0;
 static int timertick = 0;
-static void (*writestatus) () = setroot;
+static void (*writestatus) (void) = setroot;
 
 static char outputs[LENGTH(blocks)][CMDLENGTH * 4 + 1 + CLICKABLE_BLOCKS];
 static char statusbar[2][LENGTH(blocks) * (LENGTH(outputs[0]) - 1) + (LENGTH(blocks) - 1 + LEADING_DELIMITER) * (LENGTH(DELIMITER) - 1) + 1];
@@ -137,7 +137,7 @@ getstatus(char *str, char *strold)
 }
 
 void
-initialize()
+initialize(void)
 {
 	epollfd = epoll_create(LENGTH(blocks));
 	event.events = EPOLLIN;
@@ -160,7 +160,7 @@ initialize()
 }
 
 void
-printhelp()
+printhelp(void)
 {
 	puts("This is a hackable status bar meant to be used with dwm.");
 	puts("To use, run in backround by typing \"dwmblocks &\" in the terminal.");
@@ -169,7 +169,7 @@ printhelp()
 }
 
 void
-setroot()
+setroot(void)
 {
 	/* Only set root if text has changed */
 	if (!getstatus(statusbar[0], statusbar[1]))
@@ -180,7 +180,7 @@ setroot()
 }
 
 void
-setupsignals()
+setupsignals(void)
 {
 	/* Termination signals */
 	signal(SIGINT, termhandler);
@@ -215,7 +215,7 @@ setupsignals()
 }
 
 int
-setupX()
+setupX(void)
 {
 	dpy = XOpenDisplay(NULL);
 	if (!dpy)
@@ -227,7 +227,7 @@ setupX()
 }
 
 void
-signalhandler()
+signalhandler(void)
 {
 	struct signalfd_siginfo info;
 	read(signalFD, &info, sizeof(info));
@@ -258,7 +258,7 @@ signalhandler()
 }
 
 void
-statusloop()
+statusloop(void)
 {
 	struct epoll_event events[LENGTH(blocks) + 1];
 
@@ -278,13 +278,13 @@ statusloop()
 }
 
 void
-termhandler()
+termhandler(int signum)
 {
 	proccesscontinue = 0;
 }
 
 void
-termination()
+termination(void)
 {
 	XCloseDisplay(dpy);
 	close(epollfd);
@@ -318,8 +318,10 @@ updateblock(int i)
 	buffer[j] = ' ';
 
 	/* Trim trailing spaces */
-	while (j >= 0 && buffer[j] == ' ')
-		j--;
+	if (TRIM_TRAILING_SPACES) {
+		while (j >= 0 && buffer[j] == ' ')
+			j--;
+	}
 	buffer[j + 1] = 0;
 
 	/* Clear the pipe */

@@ -3,4 +3,5 @@
 dwmblocks
 dwmblocksctl
 compile_commands.json
-.cache/**
+.cache
+config.h
