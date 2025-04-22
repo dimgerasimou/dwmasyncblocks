@@ -4,7 +4,7 @@
 PREFIX  := /usr/local
 MANPREFIX = ${PREFIX}/share/man
 CC      := cc
-CFLAGS  := -pedantic -Wall -Wno-deprecated-declarations -Os
+CFLAGS  := -pedantic -Wall -Wno-deprecated-declarations -Os -c99
 LDFLAGS := -lX11
 
 all: options dwmblocks dwmblocksctl
