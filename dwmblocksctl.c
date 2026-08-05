@@ -9,12 +9,13 @@
  * restart dwmblocks.
  */
 
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <dirent.h>
-#include <unistd.h>
+#include <errno.h>
+#include <limits.h>
 #include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
 #define CMDLENGTH    70
 #define LENGTH(X)    (int)(sizeof(X) / sizeof(X[0]))
@@ -96,26 +97,6 @@ structstat(void)
 }
 
 int
-stringisnum(char *str)
-{
-	for (int i = 0; i < strlen(str); i++)
-		if (str[i] > '9' || str[i] < '0')
-			return 0;
-	return 1;
-}
-
-void
-freedirstruct(struct dirent** input, int n)
-{
-	while (n--) {
-		if (input[n] != NULL)
-			free(input[n]);
-	}
-	if (input != NULL)
-		free(input);
-}
-
-int
 getsignalnum(char *name)
 {
 	for(int i = 0; i < LENGTH(blocks); i++) {
@@ -129,35 +110,27 @@ getsignalnum(char *name)
 void
 getpidofdwmblocks(void)
 {
-	struct dirent** proclist;
-	FILE *fp;
-	char buffer[128];
-	char filename[256];
-	int proccesscount;
+	char path[PATH_MAX];
+	const char* runtimedir = getenv("XDG_RUNTIME_DIR");
+	FILE* fp;
 
-	proccesscount = scandir("/proc", &proclist, NULL, NULL);
-	if (proccesscount == -1) {
-		perror("dwmblocksctl:Failed to scan '/proc' directory");
+	if (runtimedir && *runtimedir)
+		snprintf(path, sizeof(path), "%s/dwmblocks.pid", runtimedir);
+	else
+		snprintf(path, sizeof(path), "/tmp/dwmblocks.pid");
+
+	fp = fopen(path, "r");
+	if (fp == NULL) {
+		fprintf(stderr, "dwmblocksctl:Failed to open dwmblocks pidfile '%s': %s\n", path, strerror(errno));
 		exit(EXIT_FAILURE);
 	}
-	for (int i = 0 ; i < proccesscount; i++) {
-		if (stringisnum(proclist[i]->d_name)) {
-			strcpy(filename, "/proc/");
-			strcat(filename, proclist[i]->d_name);
-			strcat(filename, "/cmdline");
-			fp = fopen(filename, "r");
-			if (fp == NULL) {
-				continue;
-			}
-			fgets(buffer, sizeof(buffer), fp);
-			fclose(fp);
-			if (strstr(buffer, "dwmblocks") != NULL) { 
-				dwmblocks_pID = strtol(proclist[i]->d_name, NULL, 10);
-				break;
-			}
-		}
+
+	if (fscanf(fp, "%d", &dwmblocks_pID) != 1) {
+		fprintf(stderr, "dwmblocksctl:Failed to read pid from pidfile '%s'\n", path);
+		fclose(fp);
+		exit(EXIT_FAILURE);
 	}
-	freedirstruct(proclist, proccesscount);
+	fclose(fp);
 }
 
 void

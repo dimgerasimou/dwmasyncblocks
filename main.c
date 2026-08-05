@@ -8,15 +8,18 @@
  * or by giving dwmblocks the corresponding block signal (SIGRTMIN+signal_number).
  */
 
+#include <errno.h>
+#include <fcntl.h>
+#include <limits.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/epoll.h>
+#include <sys/file.h>
 #include <sys/signalfd.h>
 #include <unistd.h>
 #include <X11/Xlib.h>
-#include <errno.h>
 
 #define CMDLENGTH    70
 #define LENGTH(X)    (int)(sizeof(X) / sizeof(X[0]))
@@ -35,8 +38,10 @@ void closepipe(int* pipe);
 void execblock(int i, const char* button);
 void execblocks(unsigned int time);
 int gcd(int a, int b);
+void getpidfilepath(char* buf, size_t len);
 int getstatus(char* str, char* last);
 void initialize(void);
+void lockpidfile(void);
 void printhelp(void);
 void setroot(void);
 void setupsignals(void);
@@ -53,6 +58,8 @@ static int epollfd;
 static struct epoll_event event;
 static int execlock = 0;
 static int maxinterval = 1;
+static int pidfd = -1;
+static char pidfilepath[PATH_MAX];
 static int pipes[LENGTH(blocks)][2];
 static unsigned short int proccesscontinue = 1;
 static Window root;
@@ -117,6 +124,17 @@ gcd(int a, int b)
 	return a;
 }
 
+void
+getpidfilepath(char* buf, size_t len)
+{
+	const char* runtimedir = getenv("XDG_RUNTIME_DIR");
+
+	if (runtimedir && *runtimedir)
+		snprintf(buf, len, "%s/dwmblocks.pid", runtimedir);
+	else
+		snprintf(buf, len, "/tmp/dwmblocks.pid");
+}
+
 int
 getstatus(char *str, char *strold)
 {
@@ -157,6 +175,37 @@ initialize(void)
 
 	/* Initialize Blocks */
 	raise(SIGALRM);
+}
+
+void
+lockpidfile(void)
+{
+	char pidstr[16];
+	int len;
+
+	getpidfilepath(pidfilepath, sizeof(pidfilepath));
+
+	pidfd = open(pidfilepath, O_CREAT | O_RDWR, 0644);
+	if (pidfd < 0) {
+		fprintf(stderr, "dwmblocks: Failed to open pidfile '%s': %s\n", pidfilepath, strerror(errno));
+		exit(1);
+	}
+
+	if (flock(pidfd, LOCK_EX | LOCK_NB) < 0) {
+		if (errno == EWOULDBLOCK)
+			fprintf(stderr, "dwmblocks: Another instance is already running.\n");
+		else
+			fprintf(stderr, "dwmblocks: Failed to lock pidfile '%s': %s\n", pidfilepath, strerror(errno));
+		close(pidfd);
+		exit(1);
+	}
+
+	len = snprintf(pidstr, sizeof(pidstr), "%d\n", getpid());
+	if (ftruncate(pidfd, 0) < 0 || write(pidfd, pidstr, len) < 0) {
+		fprintf(stderr, "dwmblocks: Failed to write pidfile '%s': %s\n", pidfilepath, strerror(errno));
+		close(pidfd);
+		exit(1);
+	}
 }
 
 void
@@ -291,6 +340,9 @@ termination(void)
 	close(signalFD);
 	for (int i = 0; i < LENGTH(pipes); i++)
 		closepipe(pipes[i]);
+
+	close(pidfd);
+	unlink(pidfilepath);
 }
 
 void
@@ -361,8 +413,12 @@ main(int argc, char* argv[])
 		}
 	}
 
+	lockpidfile();
+
 	if (!setupX()) {
 		fprintf(stderr, "dwmblocks: Failed to open display.\n");
+		close(pidfd);
+		unlink(pidfilepath);
 		return 1;
 	}
 
