@@ -24,8 +24,14 @@ signals can be used to update any block on demand. It is done by sending dwmbloc
 pkill -RTMIN+SIG_NO dwmblocks
 ```
 where `SIG_NO` is the signal number of the corresponding block. `SIGUSR1` can be used to
-update all blocks together. Moreover dwmblocksctl is included, where instead of trying to
-remember the signal number of the block, you can use its name.
+update all blocks together. Instead of remembering the signal number of a block, dwmblocks
+itself can be used as a client to the running daemon:
+```bash
+dwmblocks -s volume   # update the block named "volume"
+dwmblocks -a          # update all blocks
+dwmblocks -r          # restart the daemon
+dwmblocks -l          # list configured block names
+```
 
 `dwmasyncblocks`, comes in handy in cases where a block takes several seconds to execute. In
 this case, instead of every block waiting for one to finish, all blocks can update

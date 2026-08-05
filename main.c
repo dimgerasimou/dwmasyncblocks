@@ -35,11 +35,18 @@ typedef const struct {
 
 /* Functions */
 void closepipe(int* pipe);
+void cmdlist(void);
+void cmdrestart(void);
+void cmdupdateall(void);
+void cmdupdateblock(const char* name);
 void execblock(int i, const char* button);
 void execblocks(unsigned int time);
 int gcd(int a, int b);
+int getblocksignal(const char* name);
+pid_t getdaemonpid(void);
 void getpidfilepath(char* buf, size_t len);
 int getstatus(char* str, char* last);
+void initblocknames(void);
 void initialize(void);
 void lockpidfile(void);
 void printhelp(void);
@@ -71,12 +78,89 @@ static void (*writestatus) (void) = setroot;
 
 static char outputs[LENGTH(blocks)][CMDLENGTH * 4 + 1 + CLICKABLE_BLOCKS];
 static char statusbar[2][LENGTH(blocks) * (LENGTH(outputs[0]) - 1) + (LENGTH(blocks) - 1 + LEADING_DELIMITER) * (LENGTH(DELIMITER) - 1) + 1];
+static char blocknames[LENGTH(blocks)][CMDLENGTH];
 
 void
 closepipe(int* pipe)
 {
 	close(pipe[0]);
 	close(pipe[1]);
+}
+
+void
+cmdlist(void)
+{
+	for (int i = 0; i < LENGTH(blocks); i++)
+		puts(blocknames[i]);
+}
+
+void
+cmdrestart(void)
+{
+	char path[PATH_MAX];
+	char self[PATH_MAX];
+	ssize_t len;
+	pid_t pid;
+	int lockfd;
+
+	pid = getdaemonpid();
+	if (kill(pid, SIGTERM) < 0 && errno != ESRCH) {
+		fprintf(stderr, "dwmblocks: Failed to stop the running daemon: %s\n", strerror(errno));
+		exit(1);
+	}
+
+	/* Wait until the running daemon releases its pidfile lock */
+	getpidfilepath(path, sizeof(path));
+	lockfd = open(path, O_RDONLY);
+	if (lockfd >= 0) {
+		flock(lockfd, LOCK_EX);
+		close(lockfd);
+	}
+
+	len = readlink("/proc/self/exe", self, sizeof(self) - 1);
+	if (len < 0) {
+		fprintf(stderr, "dwmblocks: Failed to resolve executable path: %s\n", strerror(errno));
+		exit(1);
+	}
+	self[len] = '\0';
+
+	pid = fork();
+	if (pid < 0) {
+		fprintf(stderr, "dwmblocks: Failed to fork: %s\n", strerror(errno));
+		exit(1);
+	} else if (pid == 0) {
+		setsid();
+		execl(self, "dwmblocks", (char*)NULL);
+		_exit(EXIT_FAILURE);
+	}
+}
+
+void
+cmdupdateall(void)
+{
+	if (kill(getdaemonpid(), SIGUSR1) < 0) {
+		fprintf(stderr, "dwmblocks: Failed to signal the daemon: %s\n", strerror(errno));
+		exit(1);
+	}
+}
+
+void
+cmdupdateblock(const char* name)
+{
+	int sig = getblocksignal(name);
+
+	if (sig < 0) {
+		fprintf(stderr, "dwmblocks: Unknown block '%s'.\n", name);
+		exit(1);
+	}
+	if (sig == 0) {
+		fprintf(stderr, "dwmblocks: Block '%s' has no update signal assigned.\n", name);
+		exit(1);
+	}
+	if (kill(getdaemonpid(), SIGRTMIN + sig) < 0) {
+		fprintf(stderr, "dwmblocks: Failed to signal block '%s': %s\n", name, strerror(errno));
+		exit(1);
+	}
 }
 
 void
@@ -124,6 +208,41 @@ gcd(int a, int b)
 	return a;
 }
 
+int
+getblocksignal(const char* name)
+{
+	for (int i = 0; i < LENGTH(blocks); i++)
+		if (!strcmp(name, blocknames[i]))
+			return blocks[i].signal;
+	return -1;
+}
+
+pid_t
+getdaemonpid(void)
+{
+	char path[PATH_MAX];
+	FILE* fp;
+	long pid;
+
+	getpidfilepath(path, sizeof(path));
+
+	fp = fopen(path, "r");
+	if (!fp) {
+		fprintf(stderr, "dwmblocks: Failed to open pidfile '%s': %s\n", path, strerror(errno));
+		fprintf(stderr, "dwmblocks: Is the daemon running?\n");
+		exit(1);
+	}
+
+	if (fscanf(fp, "%ld", &pid) != 1) {
+		fprintf(stderr, "dwmblocks: Failed to read pid from pidfile '%s'.\n", path);
+		fclose(fp);
+		exit(1);
+	}
+	fclose(fp);
+
+	return (pid_t)pid;
+}
+
 void
 getpidfilepath(char* buf, size_t len)
 {
@@ -152,6 +271,27 @@ getstatus(char *str, char *strold)
 		strcat(str, outputs[i]);
 	}
 	return strcmp(str, strold);
+}
+
+void
+initblocknames(void)
+{
+	char temp[CMDLENGTH];
+	const char* src;
+	char* ptr;
+
+	for (int i = 0; i < LENGTH(blocks); i++) {
+		src = strrchr(blocks[i].command, '/');
+		strcpy(temp, ++src);
+		if ((ptr = strrchr(temp, '"')) != NULL)
+			*ptr = '\0';
+
+		if ((ptr = strchr(temp, '"')) == NULL)
+			ptr = temp;
+		else
+			ptr++;
+		strcpy(blocknames[i], ptr);
+	}
 }
 
 void
@@ -215,6 +355,11 @@ printhelp(void)
 	puts("To use, run in backround by typing \"dwmblocks &\" in the terminal.");
 	puts("Arguments:");
 	puts("\t-h    --help    Prints this.");
+	puts("\t-v              Prints the version.");
+	puts("\t-a              Updates all blocks.");
+	puts("\t-r              Restarts the daemon.");
+	puts("\t-l              Lists the configured block names.");
+	puts("\t-s <block>      Updates the named block.");
 }
 
 void
@@ -398,35 +543,48 @@ updateblock(int i)
 int
 main(int argc, char* argv[])
 {
-	/* Handle command line arguments */
-	for (int i = 1; i < argc; i++) {
-		if (!strcmp("-h", argv[i]) || !strcmp("--help", argv[i])) {
-			printhelp();
-			return 0;
-		} else if (!strcmp("-v", argv[i])) {
-			fprintf(stderr, "dwmblocks-1.0\n");
-			return 0;
-		}else {
-			fprintf(stderr, "dwmblocks: Invalid arguments.\n");
-			fprintf(stderr, "Use '-h' or \"--help\"\n");
+	/* No arguments: run as the status bar daemon */
+	if (argc < 2) {
+		lockpidfile();
+
+		if (!setupX()) {
+			fprintf(stderr, "dwmblocks: Failed to open display.\n");
+			close(pidfd);
+			unlink(pidfilepath);
 			return 1;
 		}
+
+		initialize();
+		statusloop();
+		termination();
+
+		return 0;
 	}
 
-	lockpidfile();
+	/* Otherwise, act as a client to a running daemon */
+	initblocknames();
 
-	if (!setupX()) {
-		fprintf(stderr, "dwmblocks: Failed to open display.\n");
-		close(pidfd);
-		unlink(pidfilepath);
+	if (!strcmp("-h", argv[1]) || !strcmp("--help", argv[1])) {
+		printhelp();
+	} else if (!strcmp("-v", argv[1])) {
+		fprintf(stderr, "dwmblocks-1.0\n");
+	} else if (!strcmp("-a", argv[1])) {
+		cmdupdateall();
+	} else if (!strcmp("-r", argv[1])) {
+		cmdrestart();
+	} else if (!strcmp("-l", argv[1])) {
+		cmdlist();
+	} else if (!strcmp("-s", argv[1])) {
+		if (argc < 3) {
+			fprintf(stderr, "dwmblocks: '-s' requires a block name.\n");
+			return 1;
+		}
+		cmdupdateblock(argv[2]);
+	} else {
+		fprintf(stderr, "dwmblocks: Invalid arguments.\n");
+		fprintf(stderr, "Use '-h' or \"--help\"\n");
 		return 1;
 	}
-
-	initialize();
-
-	statusloop();
-
-	termination();
 
 	return 0;
 }

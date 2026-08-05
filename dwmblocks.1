@@ -3,7 +3,7 @@
 dwmblocks
 .SH SYNOPSIS
 .B dwmblocks
-.RB [ \-vh ]
+.RB [ \-arvhl ]\ [ \-s\ block ]
 .SH DESCRIPTION
 dwmasyncblocks is an asynchronous status bar for dwm. It is partitioned in blocks,
 where each block runs asynchronusly (thus the bar does not "freeze" whenever a block
@@ -11,6 +11,10 @@ takes time to update). It has clickable blocks, where using the environemnt vari
 "BLOCK_BUTTON", the scripts can respond to mouse clicks, giving you endless possibilities
 for customization. The blocks update either by the given period at the config.h file,
 or by giving dwmblocks the corresponding block signal (SIGRTMIN+signal_number).
+.P
+Run with no arguments, dwmblocks starts the status bar daemon. Run with one of the
+options below, it instead acts as a client, signalling the already running daemon
+and exiting.
 
 .SH OPTIONS
 .TP
@@ -19,6 +23,21 @@ prints version information to stderr, then exits.
 .TP
 .B \-h
 prints a help prompt to stdout, then exits.
+.TP
+.B \-a
+updates all blocks in the running daemon.
+.TP
+.B \-r
+restarts the running daemon.
+.TP
+.B \-l
+prints the configured block names to stdout, one per line.
+.TP
+.B \-s [block]
+updates the block with the given name in the running daemon.
+
+.SH EXAMPLE
+To update the block with the name volume, you just have to run `dwmblocks -s volume`.
 
 .SH USAGE
 To use dwmblocks is straightforward. You just need to start it on the background along dwm.
@@ -39,7 +58,6 @@ Cleanly terminate the dwmblocks process.
 .B SIGINT 
 Cleanly terminate the dwmblocks process.
 .SH SEE ALSO
-.BR dwmblocksctl (1),
 .BR dwm (1),
 .BR st (1),
 .SH BUGS
