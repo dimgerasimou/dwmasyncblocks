@@ -1,65 +1,73 @@
 .TH DWMBLOCKS 1 dwmblocks\-VERSION
 .SH NAME
-dwmblocks
+dwmblocks \- asynchronous status bar for dwm
 .SH SYNOPSIS
 .B dwmblocks
 .RB [ \-\-help ]\ [ \-\-version ]
 .RB [ \-\-all ]\ [ \-\-restart ]\ [ \-\-list ]\ [ \-\-update\ block ]
 .SH DESCRIPTION
-dwmasyncblocks is an asynchronous status bar for dwm. It is partitioned in blocks,
-where each block runs asynchronuusly (thus the bar does not "freeze" whenever a block
-takes time to update). It has clickable blocks, where using the environemnt variable
-"BLOCK_BUTTON", the scripts can respond to mouse clicks, giving you endless possibilities
-for customization. The blocks update either by the given period at the config.h file,
-or by giving dwmblocks the corresponding block signal (SIGRTMIN+signal_number).
+dwmblocks renders the dwm status bar out of independent blocks, each backed by a
+shell script or binary. Blocks update on their own schedule and run asynchronously, so a
+slow block never freezes the bar. Blocks are clickable: the
+.B BLOCK_BUTTON
+environment variable is set to the button number before the script runs (requires
+dwm patched with
+.UR https://dwm.suckless.org/patches/statuscmd/
+statuscmd
+.UE ).
 .P
-Run with no arguments, dwmblocks starts the status bar daemon. Run with one of the
-options below, it instead acts as a client, signalling the already running daemon
-and exiting.
-
+Run with no arguments, dwmblocks starts the status bar daemon. Run with any option
+below, it instead acts as a client to the already running daemon.
 .SH OPTIONS
 .TP
 .B \-\-help
-prints a help prompt to stdout, then exits.
+Print a help message and exit.
 .TP
 .B \-\-version
-prints version information to stdout, then exits.
+Print version information and exit.
 .TP
 .B \-\-all
-updates all blocks in the running daemon.
+Update all blocks.
 .TP
 .B \-\-restart
-restarts the running daemon.
+Restart the daemon.
 .TP
 .B \-\-list
-prints the configured block names to stdout, one per line.
+Print configured block names, one per line.
 .TP
 .B \-\-update \fIblock\fR
-updates the block with the given name in the running daemon.
-
-.SH EXAMPLE
-To update the block with the name volume, you just have to run `dwmblocks --update volume`.
-
-.SH USAGE
-To use dwmblocks is straightforward. You just need to start it on the background along dwm.
-.SH CUSTOMIZATION
-dwmblocks is customized by creating a custom config.h and (re)compiling the source
-code. This keeps it fast, secure and simple.
+Update the named block, e.g.
+.RI "\(dq" "dwmblocks --update volume" \(dq .
 .SH SIGNALS
 .TP
-.B SIGRTMIN + BLOCK_SIG_NO
-Updates the block with the corresponding signal number.
+.B SIGRTMIN+n
+Update the block whose config.h signal is
+.IR n .
 .TP
-.b SIGUSR1
-Updates all blocks.
+.B SIGUSR1
+Update all blocks.
 .TP
-.B SIGTERM 
-Cleanly terminate the dwmblocks process.
-.TP
-.B SIGINT 
-Cleanly terminate the dwmblocks process.
+.BR SIGTERM ", " SIGINT
+Terminate cleanly.
+.SH USAGE
+Run in the background at startup, e.g. from
+.IR .xinitrc :
+.RS
+.EX
+dwmblocks &
+.EE
+.RE
+.SH CUSTOMIZATION
+Blocks and display options are set in
+.IR config.h ,
+which must exist before building (copied from
+.I config.def.h
+on first
+.BR make ).
+Rebuild after any change; there is no runtime reload.
 .SH SEE ALSO
-.BR dwm (1),
-.BR st (1),
+.BR dwm (1)
 .SH BUGS
-Inform me of any bugs on the github page: https://github.com/dimgerasimou/dwmasyncblocks.git
+Report bugs at
+.UR https://github.com/dimgerasimou/dwmasyncblocks
+.UE .

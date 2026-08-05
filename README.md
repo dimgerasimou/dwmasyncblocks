@@ -1,82 +1,69 @@
 # dwmblocks
 
-This is a status bar designed to work with [dwm](https://dwm.suckless.org/ 'dwm').  
-dwmasyncblocks works asynchronously, thus no more frustration for blocks "freezing" the bar.
+Modular, asynchronous status bar for [dwm](https://dwm.suckless.org/). Each
+block runs independently on its own schedule, so a slow block never freezes
+the rest of the bar.
 
-## Requirments
+## Requirements
 
-In order to build dwmblocks the Xlib header files are needed (for Arch, the `libx11` package).
+Xlib headers (Arch: `libx11`).
 
 ## Installation
 
-Use make to compile and install dwmblocks (make sure you edit `config.h` to
-match your setup beforehand):
+Edit `config.h` to match your setup, then:
 ```bash
 sudo make clean install
 ```
-This also installs shell completions (bash, zsh, fish) for the `dwmblocks` client commands.
+Installs the binary, man page, and shell completions (bash, zsh, fish).
 
-## Description
+## Configuration
 
-With dwmblocks, you can divide the status bar into multiple blocks, thus not having to rerun
-every single script everytime the bar updates, giving you control on how often each block updates. In addition,
-signals can be used to update any block on demand. It is done by sending dwmblocks the following signal:
-```bash
-pkill -RTMIN+SIG_NO dwmblocks
+Blocks are defined in `config.h`:
+```c
+const Block blocks[] = {
+	/*Command                  Update Interval   Update Signal */
+	{ "/path/to/script",       10,                10 },
+};
 ```
-where `SIG_NO` is the signal number of the corresponding block. `SIGUSR1` can be used to
-update all blocks together. Instead of remembering the signal number of a block, dwmblocks
-itself can be used as a client to the running daemon:
-```bash
-dwmblocks --update volume   # update the block named "volume"
-dwmblocks --all             # update all blocks
-dwmblocks --restart         # restart the daemon
-dwmblocks --list            # list configured block names
-```
+- **Update interval**, in seconds. `0` disables automatic updates.
+- **Update signal**, an offset from `SIGRTMIN`. Must be unique per block. `0`
+  makes the block unclickable and unreachable by name.
 
-`dwmasyncblocks`, comes in handy in cases where a block takes several seconds to execute. In
-this case, instead of every block waiting for one to finish, all blocks can update
-independandly thus no "freezing" and no disappearing of blocks.
-
-Blocks are clickable, and that can be utilized by using the "BLOCK_BUTTON" environment
-variable in the scripts, to be used with a dwm patched with [statuscmd](https://dwm.suckless.org/patches/statuscmd/ 'statuscmd').
+`CLICKABLE_BLOCKS`, `LEADING_DELIMITER`, `DELIMITER`, and
+`TRIM_TRAILING_SPACES` are also set here. Rebuild after any change; there is
+no runtime reload.
 
 ## Usage
 
-To set dwmasyncblocks as the statusbar, run in the background on startup. Add the
-following to the startup script of your window manager (or `.xinitrc` if you use that).
+Run in the background at startup, e.g. from `.xinitrc`:
 ```bash
 dwmblocks &
 ```
 
-### Configuration
-
-The blocks as well as some options can be defined in the `config.h` file:
-```c
-#define CLICKABLE_BLOCKS 1     // Allows the blocks to be clickable.
-#define LEADING_DELIMITER 0    // Places a delimiter at the front of the bar.
-#define DELIMITER ""           // The string to be used as the delimiter.
-
-const Block blocks[] = {
-	/*Command                  Update Interval   Update Signal */
-    ...
-	{ "/path/to/script",       10,                10 },
-    ...
-};
+Update a block on demand, by name or by raw signal:
+```bash
+dwmblocks --update volume
+pkill -RTMIN+10 dwmblocks
 ```
-The update interval is in seconds. If the interval is set to 0, that means the block wont be updated
-automaticly. If the signal is set to 0, then it renders the block unclickable
 
-Everytime the `config.h` file is editted, dwmblocks must be (re)compiled.
+```
+--all               update all blocks
+--restart           restart the daemon
+--list              list configured block names
+--update <block>    update a block by name
+```
+
+Blocks are clickable: with dwm patched for
+[statuscmd](https://dwm.suckless.org/patches/statuscmd/), clicking a block
+sets `BLOCK_BUTTON` in its script's environment to the button number.
 
 ## Uninstallation
 
-Use make to uninstall the binaries and manuals.
 ```bash
 sudo make uninstall
 ```
 
 ## Credits
-When i finished the project with some minor things missing, i happened to find UtkarshVerma's
-[dwmblocks-async](https://github.com/UtkarshVerma/dwmblocks-async 'dwmblocks-async') dwmblocks,
-where it is basicly the same as mine.
+
+Based on UtkarshVerma's
+[dwmblocks-async](https://github.com/UtkarshVerma/dwmblocks-async).

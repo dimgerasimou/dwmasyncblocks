@@ -1,11 +1,15 @@
 /* See LICENSE file for copyright and license details.
  *
- * dwmasyncblocks is an asynchronous status bar for dwm. It is partitioned in blocks,
- * where each block runs asynchronusly (thus the bar does not "freeze" whenever a block
- * takes time to update). It has clickable blocks, where using the environemnt variable
- * "BLOCK_BUTTON", the scripts can respond to mouse clicks, giving you endless possibilities
- * for customization. The blocks update either by the given period at the config.h file,
- * or by giving dwmblocks the corresponding block signal (SIGRTMIN+signal_number).
+ * dwmblocks is both the status bar daemon and its own CLI client. With no
+ * arguments it runs as the daemon: one pipe and one fork()/exec() per block,
+ * multiplexed through a single epoll instance alongside a signalfd catching
+ * SIGALRM (the block timer), SIGUSR1 (update all) and each block's
+ * SIGRTMIN+signal (update one, click). Any other invocation (--update, --all,
+ * --restart, --list) instead acts as a client: it finds the running daemon's
+ * pid through a pidfile, signals or restarts it, and exits. Blocks are
+ * declared in config.h, read by both modes.
+ *
+ * To understand everything else, start reading main().
  */
 
 #define _GNU_SOURCE
@@ -70,7 +74,7 @@ void cmdlist(void);
 void cmdrestart(void);
 void cmdupdateall(void);
 void cmdupdateblock(const char* name);
-void die(const char* fmt, ...);
+void die(const char* fmt, ...) __attribute__((format(printf, 1, 2)));
 void execblock(int i, const char* button);
 void execblocks(unsigned int time);
 unsigned int gcd(unsigned int a, unsigned int b);
@@ -94,7 +98,7 @@ void termination(void);
 void updateblock(int i);
 static void usage(void);
 void validateblocks(void);
-void warn(const char* fmt, ...);
+void warn(const char* fmt, ...) __attribute__((format(printf, 1, 2)));
 
 /* Variables */
 static Display* dpy;
@@ -114,9 +118,6 @@ static unsigned int timer = 0;
 static unsigned int timertick = 0;
 static void (*writestatus) (void) = setroot;
 
-/* +2, not +1: updateblock()'s trim loop can advance its cursor up to
- * CMDLENGTH*4 (all 4-byte UTF-8 chars), then writes a terminator one
- * past that — +1 alone leaves no room for that terminator byte. */
 static char outputs[LENGTH(blocks)][CMDLENGTH * 4 + 2 + CLICKABLE_BLOCKS];
 static char statusbar[2][LENGTH(blocks) * (LENGTH(outputs[0]) - 1) + (LENGTH(blocks) - 1 + LEADING_DELIMITER) * (LENGTH(DELIMITER) - 1) + 1];
 static char blocknames[LENGTH(blocks)][CMDLENGTH];
@@ -148,7 +149,8 @@ cmdrestart(void)
 	if (kill(pid, SIGTERM) < 0 && errno != ESRCH)
 		die("Failed to stop the running daemon:");
 
-	/* Wait until the running daemon releases its pidfile lock */
+	/* Block until the old daemon's lock is released, so our own
+	 * lockpidfile() below doesn't race it and fail. */
 	getpidfilepath(path, sizeof(path));
 	lockfd = open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
 	if (lockfd >= 0) {
@@ -214,16 +216,14 @@ void
 execblock(int i, const char* button)
 {
 	pid_t pid;
-	/* Ensure only one child process exists per block at an instance */
 	if (execlock & (1u << i))
 		return;
-	/* Lock execution of block until current instance finishes execution */
 	execlock |= 1u << i;
 
 	pid = fork();
 	if (pid < 0) {
-		/* fork() failed: nothing will ever clear this bit otherwise,
-		 * permanently disabling the block until the daemon restarts. */
+		/* Nothing else clears this bit; without it, a failed fork()
+		 * disables the block until the daemon restarts. */
 		execlock &= ~(1u << i);
 		warn("execblock: fork() failed for block %d:", i);
 	} else if (pid == 0) {
@@ -283,9 +283,6 @@ getdaemonpid(void)
 
 	getpidfilepath(path, sizeof(path));
 
-	/* O_NOFOLLOW: the pidfile path is predictable (falls back to /tmp
-	 * without XDG_RUNTIME_DIR), so refuse to follow a symlink planted
-	 * there instead of trusting whatever it points to. */
 	fd = open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
 	if (fd < 0)
 		die("Failed to open pidfile '%s' (is the daemon running?):", path);
@@ -302,9 +299,6 @@ getdaemonpid(void)
 	}
 	fclose(fp);
 
-	/* A pid <= 0 has special meaning to kill(2) (process group / all
-	 * processes) instead of naming a single process - never trust one
-	 * out of the pidfile. */
 	if (pid <= 0)
 		die("Invalid pid in pidfile '%s'.", path);
 
@@ -350,8 +344,6 @@ initblocknames(void)
 
 	for (int i = 0; i < LENGTH(blocks); i++) {
 		src = strrchr(blocks[i].command, '/');
-		/* A command with no '/' (e.g. a bare command found via $PATH)
-		 * has no directory prefix to strip; use it as-is. */
 		src = src ? src + 1 : blocks[i].command;
 		strcpy(temp, src);
 		if ((ptr = strrchr(temp, '"')) != NULL)
@@ -368,16 +360,10 @@ initblocknames(void)
 void
 initialize(void)
 {
-	/* CLOEXEC: block scripts are exec'd via /bin/sh below and have no
-	 * business inheriting the epoll fd. */
 	epollfd = epoll_create1(EPOLL_CLOEXEC);
 	event.events = EPOLLIN;
 
 	for (int i = 0; i < LENGTH(blocks); i++) {
-		/* CLOEXEC here too: each block's own pipe ends are explicitly
-		 * handled (dup2'd or closed) in execblock() right before exec,
-		 * but without this every *other* block's pipe fds would leak
-		 * into the child unexplained. */
 		pipe2(pipes[i], O_CLOEXEC);
 		event.data.u32 = (uint32_t)i;
 		epoll_ctl(epollfd, EPOLL_CTL_ADD, pipes[i][0], &event);
@@ -390,7 +376,6 @@ initialize(void)
 
 	setupsignals();
 
-	/* Initialize Blocks */
 	raise(SIGALRM);
 }
 
@@ -402,10 +387,6 @@ lockpidfile(void)
 
 	getpidfilepath(pidfilepath, sizeof(pidfilepath));
 
-	/* O_NOFOLLOW: refuse to follow a symlink planted at this predictable
-	 * path (falls back to /tmp without XDG_RUNTIME_DIR) instead of us.
-	 * O_CLOEXEC: block scripts exec'd later have no business inheriting
-	 * our lock on this file. */
 	pidfd = open(pidfilepath, O_CREAT | O_RDWR | O_CLOEXEC | O_NOFOLLOW, 0644);
 	if (pidfd < 0)
 		die("Failed to open pidfile '%s':", pidfilepath);
@@ -497,7 +478,6 @@ set_name(const char* name)
 void
 setroot(void)
 {
-	/* Only set root if text has changed */
 	if (!getstatus(statusbar[0], statusbar[1]))
 		return;
 
@@ -508,7 +488,6 @@ setroot(void)
 void
 setupsignals(void)
 {
-	/* Termination signals */
 	signal(SIGINT, termhandler);
 	signal(SIGTERM, termhandler);
 
@@ -517,18 +496,14 @@ setupsignals(void)
 	sigaddset(&handledsignals, SIGUSR1);
 	sigaddset(&handledsignals, SIGALRM);
 
-	/* Append all block signals to `handledsignals` */
 	for (int i = 0; i < LENGTH(blocks); i++)
 		if (blocks[i].signal > 0)
 			sigaddset(&handledsignals, SIGRTMIN + (int)blocks[i].signal);
 
-	/* Create a signal file descriptor for epoll to watch. CLOEXEC: block
-	 * scripts exec'd later have no business inheriting this. */
 	signalFD = signalfd(-1, &handledsignals, SFD_CLOEXEC);
 	event.data.u32 = (uint32_t)LENGTH(blocks);
 	epoll_ctl(epollfd, EPOLL_CTL_ADD, signalFD, &event);
 
-	/* Block all realtime and handled signals */
 	for (int i = SIGRTMIN; i <= SIGRTMAX; i++)
 		sigaddset(&handledsignals, i);
 	sigprocmask(SIG_BLOCK, &handledsignals, NULL);
@@ -562,15 +537,11 @@ signalhandler(void)
 
 	switch (signal) {
 	case SIGALRM:
-		/* Schedule the next timer event and execute blocks */
 		alarm(timertick);
 		execblocks(timer);
-
-		/* Wrap `timer` to the interval [1, `maxInterval`] */
 		timer = (timer + timertick - 1) % maxinterval + 1;
 		return;
 	case SIGUSR1:
-		/* Update all blocks on receiving SIGUSR1 */
 		execblocks(0);
 		return;
 	}
@@ -631,14 +602,10 @@ updateblock(int i)
 	char buffer[LENGTH(outputs[0]) - CLICKABLE_BLOCKS];
 	ssize_t bytesread = read(pipes[i][0], buffer, LENGTH(buffer));
 
-	/* Trim UTF-8 string to desired length */
 	int count = 0, j = 0;
 	while (buffer[j] != '\n' && count < CMDLENGTH) {
 		count++;
 
-		/* Skip continuation bytes, if any. unsigned char: buffer[j] can
-		 * have the high bit set (a UTF-8 lead byte), and left-shifting
-		 * a negative signed value below is undefined behavior. */
 		unsigned char ch = (unsigned char)buffer[j];
 		int skip = 1;
 		while ((ch & 0xc0) > 0x80) {
@@ -648,18 +615,15 @@ updateblock(int i)
 		j += skip;
 	}
 
-	/* Cache last character and replace it with a trailing space */
 	char ch = buffer[j];
 	buffer[j] = ' ';
 
-	/* Trim trailing spaces */
 	if (TRIM_TRAILING_SPACES) {
 		while (j >= 0 && buffer[j] == ' ')
 			j--;
 	}
 	buffer[j + 1] = 0;
 
-	/* Clear the pipe */
 	if (bytesread == LENGTH(buffer)) {
 		while (ch != '\n' && read(pipes[i][0], &ch, 1) == 1)
 			;
@@ -673,8 +637,6 @@ updateblock(int i)
 	}
 
 	strcpy(output, buffer);
-
-	/* Remove execution lock for the current block */
 	execlock &= ~(1u << i);
 }
 
@@ -687,12 +649,12 @@ usage(void)
 	      "\t\t[--all][--restart][--list]\n"
 	      "\t\t[--update block]\n"
 	      "\n"
-	      "--help              Print this message and exit\n"
-	      "--version           Print version and exit\n"
-	      "--all               Update all blocks\n"
-	      "--restart           Restart the daemon\n"
-	      "--list              List the configured block names\n"
-	      "--update block      Update the named block\n");
+	      "\t--help              Print this message and exit\n"
+	      "\t--version           Print version and exit\n"
+	      "\t--all               Update all blocks\n"
+	      "\t--restart           Restart the daemon\n"
+	      "\t--list              List the configured block names\n"
+	      "\t--update block      Update the named block\n");
 }
 
 void
