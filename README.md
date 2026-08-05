@@ -9,7 +9,7 @@ In order to build dwmblocks the Xlib header files are needed (for Arch, the `lib
 
 ## Installation
 
-Use make to compile and install dwmblocks (make sure you edit `src/config.h` to
+Use make to compile and install dwmblocks (make sure you edit `config.h` to
 match your setup beforehand):
 ```bash
 sudo make clean install
@@ -51,7 +51,7 @@ dwmblocks &
 
 ### Configuration
 
-The blocks as well as some options can be defined in the `src/config.h` file:
+The blocks as well as some options can be defined in the `config.h` file:
 ```c
 #define CLICKABLE_BLOCKS 1     // Allows the blocks to be clickable.
 #define LEADING_DELIMITER 0    // Places a delimiter at the front of the bar.
@@ -67,7 +67,7 @@ const Block blocks[] = {
 The update interval is in seconds. If the interval is set to 0, that means the block wont be updated
 automaticly. If the signal is set to 0, then it renders the block unclickable
 
-Everytime the `src/config.h` file is editted, dwmblocks must be (re)compiled.
+Everytime the `config.h` file is editted, dwmblocks must be (re)compiled.
 
 ## Uninstallation
 

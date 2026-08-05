@@ -2,10 +2,9 @@
 build/
 
 # generated
-src/config.h
+/config.h
 
 # editor artifacts
 compile_commands.json
-.cache/
-
+.*
 CLAUDE.md

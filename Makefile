@@ -6,9 +6,11 @@ CC       ?= cc
 
 CFLAGS ?= -Os
 CFLAGS += -std=c11 -Wall -Wextra -Wpedantic -Wpointer-arith -Wshadow -Wstrict-prototypes \
-    -Wmissing-prototypes -Wold-style-definition -Wformat=2 -Wconversion -Wsign-conversion
+    -Wmissing-prototypes -Wold-style-definition -Wformat=2 -Wconversion -Wsign-conversion -Werror
 
-CPPFLAGS += -MMD -MP -DVERSION=\"${VERSION}\"
+# config.h lives at the project root (not src/) so it stays the obvious,
+# first-thing-you-see customization point, matching dwm/st/dmenu.
+CPPFLAGS += -MMD -MP -DVERSION=\"${VERSION}\" -I.
 LDLIBS   ?= -lX11
 
 DEBUG_CFLAGS  := -g3 -O0 -fsanitize=address,undefined -fno-omit-frame-pointer
@@ -66,12 +68,12 @@ $(TARGET): $(OBJS) | $(BINDIR)
 	@$(PRINTF) "$(COLOR_GREEN)Linking:$(COLOR_RESET) %s\n" "$@"
 	@$(CC) $(LDFLAGS) -o $@ $(OBJS) $(LDLIBS)
 
-$(OBJDIR)/%.o: $(SRCDIR)/%.c $(SRCDIR)/config.h | $(OBJDIR)
+$(OBJDIR)/%.o: $(SRCDIR)/%.c config.h | $(OBJDIR)
 	@$(PRINTF) "$(COLOR_BLUE)Compiling:$(COLOR_RESET) %s\n" "$@"
 	@$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
-$(SRCDIR)/config.h:
-	@cp $(SRCDIR)/config.def.h $(SRCDIR)/config.h
+config.h:
+	@cp config.def.h config.h
 
 $(BINDIR) $(OBJDIR):
 	@mkdir -p $@

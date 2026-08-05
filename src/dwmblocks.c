@@ -93,6 +93,7 @@ void termhandler(int signum);
 void termination(void);
 void updateblock(int i);
 static void usage(void);
+void validateblocks(void);
 void warn(const char* fmt, ...);
 
 /* Variables */
@@ -635,11 +636,15 @@ updateblock(int i)
 	while (buffer[j] != '\n' && count < CMDLENGTH) {
 		count++;
 
-		/* Skip continuation bytes, if any */
-		char ch = buffer[j];
+		/* Skip continuation bytes, if any. unsigned char: buffer[j] can
+		 * have the high bit set (a UTF-8 lead byte), and left-shifting
+		 * a negative signed value below is undefined behavior. */
+		unsigned char ch = (unsigned char)buffer[j];
 		int skip = 1;
-		while ((ch & 0xc0) > 0x80)
-			ch <<= 1, skip++;
+		while ((ch & 0xc0) > 0x80) {
+			ch = (unsigned char)(ch << 1);
+			skip++;
+		}
 		j += skip;
 	}
 
@@ -691,6 +696,21 @@ usage(void)
 }
 
 void
+validateblocks(void)
+{
+	for (int i = 0; i < LENGTH(blocks); i++) {
+		for (int j = i + 1; j < LENGTH(blocks); j++) {
+			if (blocks[i].signal != 0 && blocks[i].signal == blocks[j].signal)
+				die("config.h: blocks '%s' and '%s' share update signal %u.",
+				    blocknames[i], blocknames[j], blocks[i].signal);
+			if (!strcmp(blocknames[i], blocknames[j]))
+				die("config.h: blocks '%s' and '%s' resolve to the same name.",
+				    blocknames[i], blocknames[j]);
+		}
+	}
+}
+
+void
 warn(const char* fmt, ...)
 {
 	va_list ap;
@@ -718,6 +738,9 @@ main(int argc, char* argv[])
 
 	options_parse(&opt, argc, argv);
 
+	initblocknames();
+	validateblocks();
+
 	switch (opt.action) {
 	case ACT_DAEMON:
 		lockpidfile();
@@ -741,12 +764,10 @@ main(int argc, char* argv[])
 		break;
 
 	case ACT_LIST:
-		initblocknames();
 		cmdlist();
 		break;
 
 	case ACT_UPDATE:
-		initblocknames();
 		cmdupdateblock(opt.blockname);
 		break;
 	}
