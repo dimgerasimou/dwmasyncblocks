@@ -5,7 +5,7 @@
 #define DELIMITER "|"
 #define TRIM_TRAILING_SPACES 1
 
-#define BLOCK(NAME) "$HOME/.local/bin/dwmblocks/" #NAME
+#define BLOCK(NAME) "$HOME/.local/bin/statusblocks/" #NAME
 
 const Block blocks[] = {
 	/*Command             Update Interval   Update Signal */

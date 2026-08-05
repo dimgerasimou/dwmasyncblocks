@@ -3,10 +3,11 @@
 dwmblocks
 .SH SYNOPSIS
 .B dwmblocks
-.RB [ \-arvhl ]\ [ \-s\ block ]
+.RB [ \-\-help ]\ [ \-\-version ]
+.RB [ \-\-all ]\ [ \-\-restart ]\ [ \-\-list ]\ [ \-\-update\ block ]
 .SH DESCRIPTION
 dwmasyncblocks is an asynchronous status bar for dwm. It is partitioned in blocks,
-where each block runs asynchronusly (thus the bar does not "freeze" whenever a block
+where each block runs asynchronuusly (thus the bar does not "freeze" whenever a block
 takes time to update). It has clickable blocks, where using the environemnt variable
 "BLOCK_BUTTON", the scripts can respond to mouse clicks, giving you endless possibilities
 for customization. The blocks update either by the given period at the config.h file,
@@ -18,26 +19,26 @@ and exiting.
 
 .SH OPTIONS
 .TP
-.B \-v
-prints version information to stderr, then exits.
-.TP
-.B \-h
+.B \-\-help
 prints a help prompt to stdout, then exits.
 .TP
-.B \-a
+.B \-\-version
+prints version information to stdout, then exits.
+.TP
+.B \-\-all
 updates all blocks in the running daemon.
 .TP
-.B \-r
+.B \-\-restart
 restarts the running daemon.
 .TP
-.B \-l
+.B \-\-list
 prints the configured block names to stdout, one per line.
 .TP
-.B \-s [block]
+.B \-\-update \fIblock\fR
 updates the block with the given name in the running daemon.
 
 .SH EXAMPLE
-To update the block with the name volume, you just have to run `dwmblocks -s volume`.
+To update the block with the name volume, you just have to run `dwmblocks --update volume`.
 
 .SH USAGE
 To use dwmblocks is straightforward. You just need to start it on the background along dwm.

@@ -8,10 +8,15 @@
  * or by giving dwmblocks the corresponding block signal (SIGRTMIN+signal_number).
  */
 
+#define _GNU_SOURCE
+
 #include <errno.h>
 #include <fcntl.h>
+#include <getopt.h>
 #include <limits.h>
 #include <signal.h>
+#include <stdarg.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -20,6 +25,10 @@
 #include <sys/signalfd.h>
 #include <unistd.h>
 #include <X11/Xlib.h>
+
+#ifndef VERSION
+#define VERSION "unknown"
+#endif
 
 #define CMDLENGTH    70
 #define LENGTH(X)    (int)(sizeof(X) / sizeof(X[0]))
@@ -33,23 +42,48 @@ typedef const struct {
 
 #include "config.h"
 
+typedef enum {
+	ACT_DAEMON = 0,
+	ACT_ALL,
+	ACT_RESTART,
+	ACT_LIST,
+	ACT_UPDATE,
+} Action;
+
+enum {
+	OPT_ALL = 1000,
+	OPT_RESTART,
+	OPT_LIST,
+	OPT_UPDATE,
+	OPT_VERSION,
+	OPT_HELP,
+};
+
+typedef struct {
+	Action action;
+	const char* blockname;
+} Options;
+
 /* Functions */
-void closepipe(int* pipe);
+void closepipe(int* fds);
 void cmdlist(void);
 void cmdrestart(void);
 void cmdupdateall(void);
 void cmdupdateblock(const char* name);
+void die(const char* fmt, ...);
 void execblock(int i, const char* button);
 void execblocks(unsigned int time);
-int gcd(int a, int b);
+unsigned int gcd(unsigned int a, unsigned int b);
+const char* get_name(void);
 int getblocksignal(const char* name);
 pid_t getdaemonpid(void);
 void getpidfilepath(char* buf, size_t len);
-int getstatus(char* str, char* last);
+int getstatus(char* str, char* strold);
 void initblocknames(void);
 void initialize(void);
 void lockpidfile(void);
-void printhelp(void);
+static int options_parse(Options* o, const int argc, char* argv[]);
+void set_name(const char* name);
 void setroot(void);
 void setupsignals(void);
 static int setupX(void);
@@ -58,33 +92,39 @@ void statusloop(void);
 void termhandler(int signum);
 void termination(void);
 void updateblock(int i);
+static void usage(void);
+void warn(const char* fmt, ...);
 
 /* Variables */
 static Display* dpy;
 static int epollfd;
 static struct epoll_event event;
-static int execlock = 0;
-static int maxinterval = 1;
+static unsigned int execlock = 0;
+static unsigned int maxinterval = 1;
 static int pidfd = -1;
 static char pidfilepath[PATH_MAX];
 static int pipes[LENGTH(blocks)][2];
 static unsigned short int proccesscontinue = 1;
+static const char* program_name;
 static Window root;
 static int screen;
 static int signalFD;
-static int timer = 0;
-static int timertick = 0;
+static unsigned int timer = 0;
+static unsigned int timertick = 0;
 static void (*writestatus) (void) = setroot;
 
-static char outputs[LENGTH(blocks)][CMDLENGTH * 4 + 1 + CLICKABLE_BLOCKS];
+/* +2, not +1: updateblock()'s trim loop can advance its cursor up to
+ * CMDLENGTH*4 (all 4-byte UTF-8 chars), then writes a terminator one
+ * past that — +1 alone leaves no room for that terminator byte. */
+static char outputs[LENGTH(blocks)][CMDLENGTH * 4 + 2 + CLICKABLE_BLOCKS];
 static char statusbar[2][LENGTH(blocks) * (LENGTH(outputs[0]) - 1) + (LENGTH(blocks) - 1 + LEADING_DELIMITER) * (LENGTH(DELIMITER) - 1) + 1];
 static char blocknames[LENGTH(blocks)][CMDLENGTH];
 
 void
-closepipe(int* pipe)
+closepipe(int* fds)
 {
-	close(pipe[0]);
-	close(pipe[1]);
+	close(fds[0]);
+	close(fds[1]);
 }
 
 void
@@ -104,30 +144,25 @@ cmdrestart(void)
 	int lockfd;
 
 	pid = getdaemonpid();
-	if (kill(pid, SIGTERM) < 0 && errno != ESRCH) {
-		fprintf(stderr, "dwmblocks: Failed to stop the running daemon: %s\n", strerror(errno));
-		exit(1);
-	}
+	if (kill(pid, SIGTERM) < 0 && errno != ESRCH)
+		die("Failed to stop the running daemon:");
 
 	/* Wait until the running daemon releases its pidfile lock */
 	getpidfilepath(path, sizeof(path));
-	lockfd = open(path, O_RDONLY);
+	lockfd = open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
 	if (lockfd >= 0) {
 		flock(lockfd, LOCK_EX);
 		close(lockfd);
 	}
 
 	len = readlink("/proc/self/exe", self, sizeof(self) - 1);
-	if (len < 0) {
-		fprintf(stderr, "dwmblocks: Failed to resolve executable path: %s\n", strerror(errno));
-		exit(1);
-	}
+	if (len < 0)
+		die("Failed to resolve executable path:");
 	self[len] = '\0';
 
 	pid = fork();
 	if (pid < 0) {
-		fprintf(stderr, "dwmblocks: Failed to fork: %s\n", strerror(errno));
-		exit(1);
+		die("Failed to fork:");
 	} else if (pid == 0) {
 		setsid();
 		execl(self, "dwmblocks", (char*)NULL);
@@ -138,10 +173,8 @@ cmdrestart(void)
 void
 cmdupdateall(void)
 {
-	if (kill(getdaemonpid(), SIGUSR1) < 0) {
-		fprintf(stderr, "dwmblocks: Failed to signal the daemon: %s\n", strerror(errno));
-		exit(1);
-	}
+	if (kill(getdaemonpid(), SIGUSR1) < 0)
+		die("Failed to signal the daemon:");
 }
 
 void
@@ -149,34 +182,50 @@ cmdupdateblock(const char* name)
 {
 	int sig = getblocksignal(name);
 
-	if (sig < 0) {
-		fprintf(stderr, "dwmblocks: Unknown block '%s'.\n", name);
-		exit(1);
-	}
-	if (sig == 0) {
-		fprintf(stderr, "dwmblocks: Block '%s' has no update signal assigned.\n", name);
-		exit(1);
-	}
-	if (kill(getdaemonpid(), SIGRTMIN + sig) < 0) {
-		fprintf(stderr, "dwmblocks: Failed to signal block '%s': %s\n", name, strerror(errno));
-		exit(1);
-	}
+	if (sig < 0)
+		die("Unknown block '%s'.", name);
+	if (sig == 0)
+		die("Block '%s' has no update signal assigned.", name);
+	if (kill(getdaemonpid(), SIGRTMIN + sig) < 0)
+		die("Failed to signal block '%s':", name);
+}
+
+void
+die(const char* fmt, ...)
+{
+	va_list ap;
+	int saved_errno = errno;
+
+	fprintf(stderr, "%s: ", program_name);
+
+	va_start(ap, fmt);
+	vfprintf(stderr, fmt, ap);
+	va_end(ap);
+
+	if (fmt[0] && fmt[strlen(fmt) - 1] == ':')
+		fprintf(stderr, " %s", strerror(saved_errno));
+	fputc('\n', stderr);
+
+	exit(1);
 }
 
 void
 execblock(int i, const char* button)
 {
-	pid_t pID;
+	pid_t pid;
 	/* Ensure only one child process exists per block at an instance */
-	if (execlock & 1 << i)
+	if (execlock & (1u << i))
 		return;
 	/* Lock execution of block until current instance finishes execution */
-	execlock |= 1 << i;
-	
-	pID = fork();
-	if (pID < 0) {
-		fprintf(stderr, "dwmblocks:execblock: fork() failed for block %d: %s\n", i, strerror(errno));
-	} else if (pID == 0) {
+	execlock |= 1u << i;
+
+	pid = fork();
+	if (pid < 0) {
+		/* fork() failed: nothing will ever clear this bit otherwise,
+		 * permanently disabling the block until the daemon restarts. */
+		execlock &= ~(1u << i);
+		warn("execblock: fork() failed for block %d:", i);
+	} else if (pid == 0) {
 		close(pipes[i][0]);
 		dup2(pipes[i][1], STDOUT_FILENO);
 		close(pipes[i][1]);
@@ -196,10 +245,10 @@ execblocks(unsigned int time)
 			execblock(i, NULL);
 }
 
-int
-gcd(int a, int b)
+unsigned int
+gcd(unsigned int a, unsigned int b)
 {
-	int temp;
+	unsigned int temp;
 	while (b > 0) {
 		temp = a % b;
 		a = b;
@@ -208,12 +257,18 @@ gcd(int a, int b)
 	return a;
 }
 
+const char*
+get_name(void)
+{
+	return program_name;
+}
+
 int
 getblocksignal(const char* name)
 {
 	for (int i = 0; i < LENGTH(blocks); i++)
 		if (!strcmp(name, blocknames[i]))
-			return blocks[i].signal;
+			return (int)blocks[i].signal;
 	return -1;
 }
 
@@ -222,23 +277,35 @@ getdaemonpid(void)
 {
 	char path[PATH_MAX];
 	FILE* fp;
+	int fd;
 	long pid;
 
 	getpidfilepath(path, sizeof(path));
 
-	fp = fopen(path, "r");
+	/* O_NOFOLLOW: the pidfile path is predictable (falls back to /tmp
+	 * without XDG_RUNTIME_DIR), so refuse to follow a symlink planted
+	 * there instead of trusting whatever it points to. */
+	fd = open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+	if (fd < 0)
+		die("Failed to open pidfile '%s' (is the daemon running?):", path);
+
+	fp = fdopen(fd, "r");
 	if (!fp) {
-		fprintf(stderr, "dwmblocks: Failed to open pidfile '%s': %s\n", path, strerror(errno));
-		fprintf(stderr, "dwmblocks: Is the daemon running?\n");
-		exit(1);
+		close(fd);
+		die("Failed to open pidfile '%s':", path);
 	}
 
 	if (fscanf(fp, "%ld", &pid) != 1) {
-		fprintf(stderr, "dwmblocks: Failed to read pid from pidfile '%s'.\n", path);
 		fclose(fp);
-		exit(1);
+		die("Failed to read pid from pidfile '%s'.", path);
 	}
 	fclose(fp);
+
+	/* A pid <= 0 has special meaning to kill(2) (process group / all
+	 * processes) instead of naming a single process - never trust one
+	 * out of the pidfile. */
+	if (pid <= 0)
+		die("Invalid pid in pidfile '%s'.", path);
 
 	return (pid_t)pid;
 }
@@ -255,12 +322,12 @@ getpidfilepath(char* buf, size_t len)
 }
 
 int
-getstatus(char *str, char *strold)
+getstatus(char* str, char* strold)
 {
 	strcpy(strold, str);
 	str[0] = '\0';
-	
-	for (unsigned short i = 0; i < LENGTH(blocks); i++) {
+
+	for (int i = 0; i < LENGTH(blocks); i++) {
 		if (LEADING_DELIMITER) {
 			if (strlen(outputs[i]))
 				strcat(str, DELIMITER);
@@ -282,7 +349,10 @@ initblocknames(void)
 
 	for (int i = 0; i < LENGTH(blocks); i++) {
 		src = strrchr(blocks[i].command, '/');
-		strcpy(temp, ++src);
+		/* A command with no '/' (e.g. a bare command found via $PATH)
+		 * has no directory prefix to strip; use it as-is. */
+		src = src ? src + 1 : blocks[i].command;
+		strcpy(temp, src);
 		if ((ptr = strrchr(temp, '"')) != NULL)
 			*ptr = '\0';
 
@@ -297,16 +367,22 @@ initblocknames(void)
 void
 initialize(void)
 {
-	epollfd = epoll_create(LENGTH(blocks));
+	/* CLOEXEC: block scripts are exec'd via /bin/sh below and have no
+	 * business inheriting the epoll fd. */
+	epollfd = epoll_create1(EPOLL_CLOEXEC);
 	event.events = EPOLLIN;
 
-	for (unsigned short i = 0; i < LENGTH(blocks); i++) {
-		pipe(pipes[i]);
-		event.data.u32 = i;
+	for (int i = 0; i < LENGTH(blocks); i++) {
+		/* CLOEXEC here too: each block's own pipe ends are explicitly
+		 * handled (dup2'd or closed) in execblock() right before exec,
+		 * but without this every *other* block's pipe fds would leak
+		 * into the child unexplained. */
+		pipe2(pipes[i], O_CLOEXEC);
+		event.data.u32 = (uint32_t)i;
 		epoll_ctl(epollfd, EPOLL_CTL_ADD, pipes[i][0], &event);
 
 		if(blocks[i].interval) {
-			maxinterval = MAX((int)(blocks[i].interval), maxinterval);
+			maxinterval = MAX(blocks[i].interval, maxinterval);
 			timertick = gcd(blocks[i].interval, timertick);
 		}
 	}
@@ -325,41 +401,96 @@ lockpidfile(void)
 
 	getpidfilepath(pidfilepath, sizeof(pidfilepath));
 
-	pidfd = open(pidfilepath, O_CREAT | O_RDWR, 0644);
-	if (pidfd < 0) {
-		fprintf(stderr, "dwmblocks: Failed to open pidfile '%s': %s\n", pidfilepath, strerror(errno));
-		exit(1);
-	}
+	/* O_NOFOLLOW: refuse to follow a symlink planted at this predictable
+	 * path (falls back to /tmp without XDG_RUNTIME_DIR) instead of us.
+	 * O_CLOEXEC: block scripts exec'd later have no business inheriting
+	 * our lock on this file. */
+	pidfd = open(pidfilepath, O_CREAT | O_RDWR | O_CLOEXEC | O_NOFOLLOW, 0644);
+	if (pidfd < 0)
+		die("Failed to open pidfile '%s':", pidfilepath);
 
 	if (flock(pidfd, LOCK_EX | LOCK_NB) < 0) {
 		if (errno == EWOULDBLOCK)
-			fprintf(stderr, "dwmblocks: Another instance is already running.\n");
+			die("Another instance is already running.");
 		else
-			fprintf(stderr, "dwmblocks: Failed to lock pidfile '%s': %s\n", pidfilepath, strerror(errno));
-		close(pidfd);
-		exit(1);
+			die("Failed to lock pidfile '%s':", pidfilepath);
 	}
 
 	len = snprintf(pidstr, sizeof(pidstr), "%d\n", getpid());
-	if (ftruncate(pidfd, 0) < 0 || write(pidfd, pidstr, len) < 0) {
-		fprintf(stderr, "dwmblocks: Failed to write pidfile '%s': %s\n", pidfilepath, strerror(errno));
-		close(pidfd);
-		exit(1);
+	if (ftruncate(pidfd, 0) < 0 || write(pidfd, pidstr, (size_t)len) < 0)
+		die("Failed to write pidfile '%s':", pidfilepath);
+}
+
+static int
+options_parse(Options* o, const int argc, char* argv[])
+{
+	int nactions = 0;
+	int opt;
+
+	o->action = ACT_DAEMON;
+	o->blockname = NULL;
+
+	struct option longopts[] = {
+		{ "all",     no_argument,       0, OPT_ALL     },
+		{ "restart", no_argument,       0, OPT_RESTART },
+		{ "list",    no_argument,       0, OPT_LIST    },
+		{ "update",  required_argument, 0, OPT_UPDATE  },
+		{ "help",    no_argument,       0, OPT_HELP    },
+		{ "version", no_argument,       0, OPT_VERSION },
+		{ 0,         0,                 0, 0           },
+	};
+
+	while ((opt = getopt_long(argc, argv, "", longopts, NULL)) != -1) {
+		switch (opt) {
+		case OPT_ALL:
+			nactions++;
+			o->action = ACT_ALL;
+			break;
+
+		case OPT_RESTART:
+			nactions++;
+			o->action = ACT_RESTART;
+			break;
+
+		case OPT_LIST:
+			nactions++;
+			o->action = ACT_LIST;
+			break;
+
+		case OPT_UPDATE:
+			nactions++;
+			o->action = ACT_UPDATE;
+			o->blockname = optarg;
+			break;
+
+		case OPT_HELP:
+			usage();
+			exit(0);
+
+		case OPT_VERSION:
+			puts("dwmblocks-" VERSION);
+			exit(0);
+
+		default:
+			fputc('\n', stderr);
+			usage();
+			exit(1);
+		}
 	}
+
+	if (optind < argc)
+		die("unexpected argument \"%s\"", argv[optind]);
+
+	if (nactions > 1)
+		die("only one action may be given.");
+
+	return 0;
 }
 
 void
-printhelp(void)
+set_name(const char* name)
 {
-	puts("This is a hackable status bar meant to be used with dwm.");
-	puts("To use, run in backround by typing \"dwmblocks &\" in the terminal.");
-	puts("Arguments:");
-	puts("\t-h    --help    Prints this.");
-	puts("\t-v              Prints the version.");
-	puts("\t-a              Updates all blocks.");
-	puts("\t-r              Restarts the daemon.");
-	puts("\t-l              Lists the configured block names.");
-	puts("\t-s <block>      Updates the named block.");
+	program_name = name;
 }
 
 void
@@ -386,17 +517,18 @@ setupsignals(void)
 	sigaddset(&handledsignals, SIGALRM);
 
 	/* Append all block signals to `handledsignals` */
-	for (unsigned short i = 0; i < LENGTH(blocks); i++)
+	for (int i = 0; i < LENGTH(blocks); i++)
 		if (blocks[i].signal > 0)
-			sigaddset(&handledsignals, SIGRTMIN + blocks[i].signal);
+			sigaddset(&handledsignals, SIGRTMIN + (int)blocks[i].signal);
 
-	/* Create a signal file descriptor for epoll to watch */
-	signalFD = signalfd(-1, &handledsignals, 0);
-	event.data.u32 = LENGTH(blocks);
+	/* Create a signal file descriptor for epoll to watch. CLOEXEC: block
+	 * scripts exec'd later have no business inheriting this. */
+	signalFD = signalfd(-1, &handledsignals, SFD_CLOEXEC);
+	event.data.u32 = (uint32_t)LENGTH(blocks);
 	epoll_ctl(epollfd, EPOLL_CTL_ADD, signalFD, &event);
 
 	/* Block all realtime and handled signals */
-	for (unsigned short i = SIGRTMIN; i <= SIGRTMAX; i++)
+	for (int i = SIGRTMIN; i <= SIGRTMAX; i++)
 		sigaddset(&handledsignals, i);
 	sigprocmask(SIG_BLOCK, &handledsignals, NULL);
 
@@ -443,8 +575,8 @@ signalhandler(void)
 	}
 
 	for (int j = 0; j < LENGTH(blocks); j++) {
-		if (blocks[j].signal == signal - SIGRTMIN) {
-			char button[] = {('0' + info.ssi_int) & 0xff, 0};
+		if (blocks[j].signal == signal - (unsigned int)SIGRTMIN) {
+			char button[] = {(char)(('0' + info.ssi_int) & 0xff), 0};
 			execblock(j, button);
 			break;
 		}
@@ -459,7 +591,7 @@ statusloop(void)
 	while (proccesscontinue) {
 		int eventCount = epoll_wait(epollfd, events, LENGTH(events), -1);
 		for (int i = 0; i < eventCount; i++) {
-			unsigned short id = events[i].data.u32;
+			unsigned short id = (unsigned short)events[i].data.u32;
 			if (id < LENGTH(blocks))
 				updateblock(id);
 			else
@@ -474,6 +606,7 @@ statusloop(void)
 void
 termhandler(int signum)
 {
+	(void)signum;
 	proccesscontinue = 0;
 }
 
@@ -495,7 +628,7 @@ updateblock(int i)
 {
 	char* output = outputs[i];
 	char buffer[LENGTH(outputs[0]) - CLICKABLE_BLOCKS];
-	int bytesRead = read(pipes[i][0], buffer, LENGTH(buffer));
+	ssize_t bytesread = read(pipes[i][0], buffer, LENGTH(buffer));
 
 	/* Trim UTF-8 string to desired length */
 	int count = 0, j = 0;
@@ -522,14 +655,14 @@ updateblock(int i)
 	buffer[j + 1] = 0;
 
 	/* Clear the pipe */
-	if (bytesRead == LENGTH(buffer)) {
+	if (bytesread == LENGTH(buffer)) {
 		while (ch != '\n' && read(pipes[i][0], &ch, 1) == 1)
 			;
 	}
 
 	if (CLICKABLE_BLOCKS) {
-		if (bytesRead > 1 && blocks[i].signal > 0) {
-			output[0] = blocks[i].signal;
+		if (bytesread > 1 && blocks[i].signal > 0) {
+			output[0] = (char)blocks[i].signal;
 			output++;
 		}
 	}
@@ -537,53 +670,85 @@ updateblock(int i)
 	strcpy(output, buffer);
 
 	/* Remove execution lock for the current block */
-	execlock &= ~(1 << i);
+	execlock &= ~(1u << i);
+}
+
+static void
+usage(void)
+{
+	printf("usage: %s [options]\n%s", get_name(),
+	      "\tOptions:\n"
+	      "\t\t[--help][--version]\n"
+	      "\t\t[--all][--restart][--list]\n"
+	      "\t\t[--update block]\n"
+	      "\n"
+	      "--help              Print this message and exit\n"
+	      "--version           Print version and exit\n"
+	      "--all               Update all blocks\n"
+	      "--restart           Restart the daemon\n"
+	      "--list              List the configured block names\n"
+	      "--update block      Update the named block\n");
+}
+
+void
+warn(const char* fmt, ...)
+{
+	va_list ap;
+	int saved_errno = errno;
+
+	fprintf(stderr, "%s: ", program_name);
+
+	va_start(ap, fmt);
+	vfprintf(stderr, fmt, ap);
+	va_end(ap);
+
+	if (fmt[0] && fmt[strlen(fmt) - 1] == ':')
+		fprintf(stderr, " %s", strerror(saved_errno));
+	fputc('\n', stderr);
 }
 
 int
 main(int argc, char* argv[])
 {
-	/* No arguments: run as the status bar daemon */
-	if (argc < 2) {
+	Options opt;
+	const char* prog;
+
+	prog = strrchr(argv[0], '/');
+	set_name(prog ? prog + 1 : argv[0]);
+
+	options_parse(&opt, argc, argv);
+
+	switch (opt.action) {
+	case ACT_DAEMON:
 		lockpidfile();
 
 		if (!setupX()) {
-			fprintf(stderr, "dwmblocks: Failed to open display.\n");
-			close(pidfd);
 			unlink(pidfilepath);
-			return 1;
+			die("Failed to open display.");
 		}
 
 		initialize();
 		statusloop();
 		termination();
+		break;
 
-		return 0;
-	}
-
-	/* Otherwise, act as a client to a running daemon */
-	initblocknames();
-
-	if (!strcmp("-h", argv[1]) || !strcmp("--help", argv[1])) {
-		printhelp();
-	} else if (!strcmp("-v", argv[1])) {
-		fprintf(stderr, "dwmblocks-1.0\n");
-	} else if (!strcmp("-a", argv[1])) {
+	case ACT_ALL:
 		cmdupdateall();
-	} else if (!strcmp("-r", argv[1])) {
+		break;
+
+	case ACT_RESTART:
 		cmdrestart();
-	} else if (!strcmp("-l", argv[1])) {
+		break;
+
+	case ACT_LIST:
+		initblocknames();
 		cmdlist();
-	} else if (!strcmp("-s", argv[1])) {
-		if (argc < 3) {
-			fprintf(stderr, "dwmblocks: '-s' requires a block name.\n");
-			return 1;
-		}
-		cmdupdateblock(argv[2]);
-	} else {
-		fprintf(stderr, "dwmblocks: Invalid arguments.\n");
-		fprintf(stderr, "Use '-h' or \"--help\"\n");
-		return 1;
+		break;
+
+	case ACT_UPDATE:
+		initblocknames();
+		cmdupdateblock(opt.blockname);
+		break;
 	}
 
 	return 0;

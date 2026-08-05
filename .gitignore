@@ -1,8 +1,11 @@
-*.out
-*.o
-dwmblocks
-dwmblocksctl
+# build artifacts
+build/
+
+# generated
+src/config.h
+
+# editor artifacts
 compile_commands.json
-.cache
-config.h
+.cache/
+
 CLAUDE.md

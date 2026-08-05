@@ -1,0 +1,25 @@
+#compdef dwmblocks
+# zsh completion for dwmblocks
+# Install as: <dir on $fpath>/_dwmblocks
+#         e.g. /usr/share/zsh/site-functions/_dwmblocks
+
+_dwmblocks()
+{
+	local state
+
+	_arguments -s \
+		'(- *)--help[print help and exit]' \
+		'(- *)--version[print version and exit]' \
+		'--all[update all blocks]' \
+		'--restart[restart the daemon]' \
+		'--list[list configured block names]' \
+		'--update=[update a block by name]:block:->blocks'
+
+	if [[ $state == blocks ]]; then
+		local -a blocks
+		blocks=(${(f)"$(dwmblocks --list 2>/dev/null)"})
+		compadd -a blocks
+	fi
+}
+
+_dwmblocks "$@"

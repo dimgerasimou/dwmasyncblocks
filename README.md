@@ -9,11 +9,12 @@ In order to build dwmblocks the Xlib header files are needed (for Arch, the `lib
 
 ## Installation
 
-Use make to compile and install dwmblocks (make sure you edit config.h to
+Use make to compile and install dwmblocks (make sure you edit `src/config.h` to
 match your setup beforehand):
 ```bash
 sudo make clean install
 ```
+This also installs shell completions (bash, zsh, fish) for the `dwmblocks` client commands.
 
 ## Description
 
@@ -27,10 +28,10 @@ where `SIG_NO` is the signal number of the corresponding block. `SIGUSR1` can be
 update all blocks together. Instead of remembering the signal number of a block, dwmblocks
 itself can be used as a client to the running daemon:
 ```bash
-dwmblocks -s volume   # update the block named "volume"
-dwmblocks -a          # update all blocks
-dwmblocks -r          # restart the daemon
-dwmblocks -l          # list configured block names
+dwmblocks --update volume   # update the block named "volume"
+dwmblocks --all             # update all blocks
+dwmblocks --restart         # restart the daemon
+dwmblocks --list            # list configured block names
 ```
 
 `dwmasyncblocks`, comes in handy in cases where a block takes several seconds to execute. In
@@ -50,7 +51,7 @@ dwmblocks &
 
 ### Configuration
 
-The blocks as well as some options can be defined in the `config.h` file:
+The blocks as well as some options can be defined in the `src/config.h` file:
 ```c
 #define CLICKABLE_BLOCKS 1     // Allows the blocks to be clickable.
 #define LEADING_DELIMITER 0    // Places a delimiter at the front of the bar.
@@ -66,7 +67,7 @@ const Block blocks[] = {
 The update interval is in seconds. If the interval is set to 0, that means the block wont be updated
 automaticly. If the signal is set to 0, then it renders the block unclickable
 
-Everytime the `config.h` file is editted, dwmblocks must be (re)compiled.
+Everytime the `src/config.h` file is editted, dwmblocks must be (re)compiled.
 
 ## Uninstallation
 
