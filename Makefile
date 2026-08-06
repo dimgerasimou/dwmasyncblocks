@@ -8,16 +8,13 @@ CFLAGS ?= -Os
 CFLAGS += -std=c11 -Wall -Wextra -Wpedantic -Wpointer-arith -Wshadow -Wstrict-prototypes \
     -Wmissing-prototypes -Wold-style-definition -Wformat=2 -Wconversion -Wsign-conversion -Werror
 
-# config.h lives at the project root (not src/) so it stays the obvious,
-# first-thing-you-see customization point, matching dwm/st/dmenu.
 CPPFLAGS += -MMD -MP -DVERSION=\"${VERSION}\" -I.
 LDLIBS   ?= -lX11
 
 DEBUG_CFLAGS  := -g3 -O0 -fsanitize=address,undefined -fno-omit-frame-pointer
 DEBUG_LDFLAGS := -fsanitize=address,leak,undefined
 
-# -fanalyzer is GCC-only; enable it only when CC is gcc so `make debug`
-# still works under clang.
+# -fanalyzer is GCC-only
 ifneq (,$(findstring gcc,$(shell $(CC) --version 2>/dev/null)))
 DEBUG_CFLAGS += -fanalyzer
 endif
