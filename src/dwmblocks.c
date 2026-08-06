@@ -311,9 +311,9 @@ getpidfilepath(char* buf, size_t len)
 	const char* runtimedir = getenv("XDG_RUNTIME_DIR");
 
 	if (runtimedir && *runtimedir)
-		snprintf(buf, len, "%s/dwmblocks.pid", runtimedir);
+		snprintf(buf, len, "%s/dwmblocks.lock", runtimedir);
 	else
-		snprintf(buf, len, "/tmp/dwmblocks.pid");
+		snprintf(buf, len, "/tmp/dwmblocks.lock");
 }
 
 int
