@@ -57,14 +57,42 @@ Run in the background at startup, e.g. from
 dwmblocks &
 .EE
 .RE
+.SH BLOCK OUTPUT
+A block prints one line of tab-separated
+.IB key = value
+fields.
+.B class
+names a colour class,
+.B rich
+is the text shown in icon mode and
+.B plain
+the text shown otherwise. Each
+.B class=
+or repeated key starts a new segment. A line that doesn't start with one of
+these keys is shown unchanged.
+.SH ENVIRONMENT
+.TP
+.B BLOCK_BUTTON
+Set to the clicked button.
+.TP
+.B BLOCK_CLR_\fICLASS\fR
+Set to each colour class's current
+.B #RRGGBB
+value.
 .SH CUSTOMIZATION
-Blocks and display options are set in
+Blocks, colour classes and display options are set in
 .IR config.h ,
 which must exist before building (copied from
 .I config.def.h
 on first
 .BR make ).
-Rebuild after any change; there is no runtime reload.
+Colours and icon style are overridden at runtime by the X resources
+.BI statusblocks.clr_ class
+and
+.BI statusblocks.icon_ block
+(0 or 1); changes made with
+.BR xrdb (1)
+apply immediately.
 .SH SEE ALSO
 .BR dwm (1)
 .SH BUGS

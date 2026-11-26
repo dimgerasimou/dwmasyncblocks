@@ -4,7 +4,10 @@
  * arguments it runs as the daemon: one pipe and one fork()/exec() per block,
  * multiplexed through a single epoll instance alongside a signalfd catching
  * SIGALRM (the block timer), SIGUSR1 (update all) and each block's
- * SIGRTMIN+signal (update one, click). Any other invocation (--update, --all,
+ * SIGRTMIN+signal (update one, click), and the X connection, which reports
+ * RESOURCE_MANAGER changes so colours and icon modes follow xrdb live.
+ * Blocks print tab-separated class=/rich=/plain= fields; the daemon picks the
+ * variant, colours it and builds the status line. Any other invocation (--update, --all,
  * --restart, --list) instead acts as a client: it finds the running daemon's
  * pid through a pidfile, signals or restarts it, and exits. Blocks are
  * declared in config.h, read by both modes.
@@ -27,14 +30,21 @@
 #include <sys/epoll.h>
 #include <sys/file.h>
 #include <sys/signalfd.h>
+#include <ctype.h>
 #include <unistd.h>
+#include <X11/Xatom.h>
 #include <X11/Xlib.h>
+#include <X11/Xresource.h>
 
 #ifndef VERSION
 #define VERSION "unknown"
 #endif
 
 #define CMDLENGTH    70
+#define RAWLENGTH    1024
+#define HEXLENGTH    8
+#define ESCLENGTH    64
+#define MAXSEGMENTS  8
 #define LENGTH(X)    (int)(sizeof(X) / sizeof(X[0]))
 #define MAX(a, b)    (a > b ? a : b)
 
@@ -42,7 +52,19 @@ typedef const struct {
 	const char* command;
 	const unsigned int interval;
 	const unsigned int signal;
+	const unsigned int icons;
 } Block;
+
+typedef const struct {
+	const char* class;
+	const char* hex;
+} Colour;
+
+typedef struct {
+	const char* class;
+	const char* rich;
+	const char* plain;
+} Segment;
 
 #include "config.h"
 
@@ -69,6 +91,7 @@ typedef struct {
 } Options;
 
 /* Functions */
+static void appendtext(char** dst, size_t* room, const char* s, size_t len, int* count);
 void closepipe(int* fds);
 void cmdlist(void);
 void cmdrestart(void);
@@ -77,6 +100,8 @@ void cmdupdateblock(const char* name);
 void die(const char* fmt, ...) __attribute__((format(printf, 1, 2)));
 void execblock(int i, const char* button);
 void execblocks(unsigned int time);
+static void exportcolours(void);
+static int findcolour(const char* class);
 unsigned int gcd(unsigned int a, unsigned int b);
 const char* get_name(void);
 int getblocksignal(const char* name);
@@ -85,14 +110,19 @@ void getpidfilepath(char* buf, size_t len);
 int getstatus(char* str, char* strold);
 void initblocknames(void);
 void initialize(void);
+static int ishexcolour(const char* s);
+static void loadresources(void);
 void lockpidfile(void);
 static int options_parse(Options* o, const int argc, char* argv[]);
+static int parsesegments(char* line, Segment* segs);
+static void renderblock(int i);
 void set_name(const char* name);
 void setroot(void);
 void setupsignals(void);
 static int setupX(void);
 void signalhandler(void);
 void statusloop(void);
+static void xevents(void);
 void termhandler(int signum);
 void termination(void);
 void updateblock(int i);
@@ -118,9 +148,41 @@ static unsigned int timer = 0;
 static unsigned int timertick = 0;
 static void (*writestatus) (void) = setroot;
 
-static char outputs[LENGTH(blocks)][CMDLENGTH * 4 + 2 + CLICKABLE_BLOCKS];
+static char hexes[LENGTH(colours)][HEXLENGTH];
+static unsigned int icons[LENGTH(blocks)];
+static char raws[LENGTH(blocks)][RAWLENGTH];
+static unsigned int classwarned = 0;
+
+static char outputs[LENGTH(blocks)][CMDLENGTH * 4 + MAXSEGMENTS * 2 * ESCLENGTH + 2 + CLICKABLE_BLOCKS];
 static char statusbar[2][LENGTH(blocks) * (LENGTH(outputs[0]) - 1) + (LENGTH(blocks) - 1 + LEADING_DELIMITER) * (LENGTH(DELIMITER) - 1) + 1];
 static char blocknames[LENGTH(blocks)][CMDLENGTH];
+
+/* Copies whole UTF-8 characters until CMDLENGTH visible ones have been
+ * written in total across the block, or the buffer is full. */
+static void
+appendtext(char** dst, size_t* room, const char* s, size_t len, int* count)
+{
+	size_t j = 0;
+
+	while (j < len && *count < CMDLENGTH) {
+		size_t n = 1;
+		unsigned char ch = (unsigned char)s[j];
+
+		while ((ch & 0xc0) > 0x80) {
+			ch = (unsigned char)(ch << 1);
+			n++;
+		}
+		if (j + n > len || n >= *room)
+			break;
+
+		memcpy(*dst, s + j, n);
+		*dst += n;
+		*room -= n;
+		j += n;
+		(*count)++;
+	}
+	**dst = '\0';
+}
 
 void
 closepipe(int* fds)
@@ -233,6 +295,7 @@ execblock(int i, const char* button)
 
 		if (button)
 			setenv("BLOCK_BUTTON", button, 1);
+		exportcolours();
 		execl("/bin/sh", "sh", "-c", blocks[i].command, (char*)NULL);
 		exit(EXIT_SUCCESS);
 	}
@@ -244,6 +307,35 @@ execblocks(unsigned int time)
 	for (int i = 0; i < LENGTH(blocks); i++)
 		if (time == 0 || (blocks[i].interval != 0 && time % blocks[i].interval == 0))
 			execblock(i, NULL);
+}
+
+static void
+exportcolours(void)
+{
+	char name[ESCLENGTH];
+
+	for (int i = 0; i < LENGTH(colours); i++) {
+		int n = snprintf(name, sizeof(name), "BLOCK_CLR_%s", colours[i].class);
+
+		if (n < 0 || (size_t)n >= sizeof(name))
+			continue;
+		for (char* p = name; *p; p++)
+			*p = (char)toupper((unsigned char)*p);
+
+		if (hexes[i][0])
+			setenv(name, hexes[i], 1);
+		else
+			unsetenv(name);
+	}
+}
+
+static int
+findcolour(const char* class)
+{
+	for (int i = 0; i < LENGTH(colours); i++)
+		if (!strcmp(class, colours[i].class))
+			return i;
+	return -1;
 }
 
 unsigned int
@@ -376,7 +468,71 @@ initialize(void)
 
 	setupsignals();
 
+	loadresources();
+	XSelectInput(dpy, root, PropertyChangeMask);
+	event.data.u32 = (uint32_t)LENGTH(blocks) + 1;
+	epoll_ctl(epollfd, EPOLL_CTL_ADD, ConnectionNumber(dpy), &event);
+
 	raise(SIGALRM);
+}
+
+static int
+ishexcolour(const char* s)
+{
+	if (!s || s[0] != '#' || strlen(s) != HEXLENGTH - 1)
+		return 0;
+	for (int i = 1; i < HEXLENGTH - 1; i++)
+		if (!isxdigit((unsigned char)s[i]))
+			return 0;
+	return 1;
+}
+
+/* Read the RESOURCE_MANAGER property itself: XResourceManagerString() is a
+ * snapshot from XOpenDisplay() and never sees a later xrdb. */
+static void
+loadresources(void)
+{
+	char name[CMDLENGTH + sizeof(XRES_PREFIX) + 8];
+	unsigned char* prop = NULL;
+	unsigned long nitems, after;
+	XrmDatabase db = NULL;
+	XrmValue val;
+	Atom type;
+	char* rtype;
+	int format;
+
+	for (int i = 0; i < LENGTH(colours); i++) {
+		hexes[i][0] = '\0';
+		if (ishexcolour(colours[i].hex))
+			memcpy(hexes[i], colours[i].hex, HEXLENGTH);
+	}
+	for (int i = 0; i < LENGTH(blocks); i++)
+		icons[i] = blocks[i].icons ? 1 : 0;
+
+	if (XGetWindowProperty(dpy, root, XA_RESOURCE_MANAGER, 0, LONG_MAX / 4, False,
+	                       XA_STRING, &type, &format, &nitems, &after, &prop) != Success
+	    || !prop)
+		return;
+
+	XrmInitialize();
+	db = XrmGetStringDatabase((char*)prop);
+	XFree(prop);
+	if (!db)
+		return;
+
+	for (int i = 0; i < LENGTH(colours); i++) {
+		int w = snprintf(name, sizeof(name), XRES_PREFIX "clr_%s", colours[i].class);
+		if (w > 0 && (size_t)w < sizeof(name) && XrmGetResource(db, name, name, &rtype, &val) && ishexcolour(val.addr))
+			memcpy(hexes[i], val.addr, HEXLENGTH);
+	}
+	for (int i = 0; i < LENGTH(blocks); i++) {
+		int w = snprintf(name, sizeof(name), XRES_PREFIX "icon_%s", blocknames[i]);
+		if (w > 0 && (size_t)w < sizeof(name) && XrmGetResource(db, name, name, &rtype, &val) && val.addr
+		    && (!strcmp(val.addr, "0") || !strcmp(val.addr, "1")))
+			icons[i] = val.addr[0] == '1';
+	}
+
+	XrmDestroyDatabase(db);
 }
 
 void
@@ -469,6 +625,132 @@ options_parse(Options* o, const int argc, char* argv[])
 	return 0;
 }
 
+/* Splits "key=value" fields separated by tabs into segments. A segment
+ * starts at each class= and whenever a key repeats. Returns -1 for a line
+ * that isn't in field format at all, so it is shown as plain text. */
+static int
+parsesegments(char* line, Segment* segs)
+{
+	static const char* const keys[] = { "class", "rich", "plain" };
+	char* field = line;
+	int n = 0;
+
+	if (strncmp(line, "class=", 6) && strncmp(line, "rich=", 5) && strncmp(line, "plain=", 6))
+		return -1;
+
+	while (field) {
+		char* next = strchr(field, '\t');
+		char* val = strchr(field, '=');
+		const char** slot = NULL;
+		int k;
+
+		if (next)
+			*next++ = '\0';
+		if (!val) {
+			field = next;
+			continue;
+		}
+		*val++ = '\0';
+
+		for (k = 0; k < LENGTH(keys) && strcmp(field, keys[k]); k++)
+			;
+		if (k == LENGTH(keys)) {
+			field = next;
+			continue;
+		}
+
+		if (n > 0) {
+			Segment* s = &segs[n - 1];
+			slot = k == 0 ? &s->class : k == 1 ? &s->rich : &s->plain;
+		}
+		if (n == 0 || k == 0 || *slot) {
+			if (n == MAXSEGMENTS)
+				break;
+			segs[n] = (Segment){ NULL, NULL, NULL };
+			slot = k == 0 ? &segs[n].class : k == 1 ? &segs[n].rich : &segs[n].plain;
+			n++;
+		}
+		*slot = val;
+		field = next;
+	}
+	return n;
+}
+
+static void
+renderblock(int i)
+{
+	Segment segs[MAXSEGMENTS];
+	char line[RAWLENGTH];
+	const char* text[MAXSEGMENTS];
+	char* out = outputs[i];
+	size_t room = sizeof(outputs[i]);
+	int count = 0, last = -1, n;
+
+	if (CLICKABLE_BLOCKS && raws[i][0] && blocks[i].signal > 0) {
+		*out++ = (char)blocks[i].signal;
+		room--;
+	}
+	*out = '\0';
+
+	memcpy(line, raws[i], sizeof(line));
+	n = parsesegments(line, segs);
+
+	if (n < 0) {
+		size_t len = strlen(line);
+		if (TRIM_TRAILING_SPACES)
+			while (len && line[len - 1] == ' ')
+				len--;
+		appendtext(&out, &room, line, len, &count);
+		return;
+	}
+
+	for (int j = 0; j < n; j++) {
+		const char* a = icons[i] ? segs[j].rich : segs[j].plain;
+		const char* b = icons[i] ? segs[j].plain : segs[j].rich;
+
+		text[j] = a ? a : b;
+		if (text[j] && *text[j])
+			last = j;
+	}
+
+	for (int j = 0; j <= last && count < CMDLENGTH; j++) {
+		const char* hex = "";
+		size_t len;
+
+		if (!text[j] || !*text[j])
+			continue;
+
+		if (segs[j].class) {
+			int c = findcolour(segs[j].class);
+			if (c >= 0) {
+				hex = hexes[c];
+			} else if (!(classwarned & (1u << i))) {
+				classwarned |= 1u << i;
+				warn("block '%s': unknown colour class '%s'.", blocknames[i], segs[j].class);
+			}
+		}
+
+		len = strlen(text[j]);
+		if (TRIM_TRAILING_SPACES && j == last)
+			while (len && text[j][len - 1] == ' ')
+				len--;
+
+		if (*hex) {
+			int w = snprintf(out, room, CLR_FMT, hex);
+			if (w > 0 && (size_t)w < room) {
+				out += w;
+				room -= (size_t)w;
+			}
+		}
+		appendtext(&out, &room, text[j], len, &count);
+		if (*hex && strlen(CLR_NRM) < room) {
+			strcpy(out, CLR_NRM);
+			out += strlen(CLR_NRM);
+			room -= strlen(CLR_NRM);
+		}
+	}
+}
+
 void
 set_name(const char* name)
 {
@@ -558,7 +840,7 @@ signalhandler(void)
 void
 statusloop(void)
 {
-	struct epoll_event events[LENGTH(blocks) + 1];
+	struct epoll_event events[LENGTH(blocks) + 2];
 
 	while (proccesscontinue) {
 		int eventCount = epoll_wait(epollfd, events, LENGTH(events), -1);
@@ -566,9 +848,13 @@ statusloop(void)
 			unsigned short id = (unsigned short)events[i].data.u32;
 			if (id < LENGTH(blocks))
 				updateblock(id);
-			else
+			else if (id == LENGTH(blocks))
 				signalhandler();
 		}
+
+		/* Every pass, not only on fd wakeups: Xlib may already hold
+		 * events in its queue that epoll will never report. */
+		xevents();
 
 		if (eventCount != -1)
 			writestatus();
@@ -598,45 +884,23 @@ termination(void)
 void
 updateblock(int i)
 {
-	char* output = outputs[i];
-	char buffer[LENGTH(outputs[0]) - CLICKABLE_BLOCKS];
-	ssize_t bytesread = read(pipes[i][0], buffer, LENGTH(buffer));
+	char* raw = raws[i];
+	ssize_t bytesread = read(pipes[i][0], raw, RAWLENGTH - 1);
+	char* nl;
 
-	int count = 0, j = 0;
-	while (buffer[j] != '\n' && count < CMDLENGTH) {
-		count++;
+	if (bytesread < 0)
+		bytesread = 0;
+	raw[bytesread] = '\0';
 
-		unsigned char ch = (unsigned char)buffer[j];
-		int skip = 1;
-		while ((ch & 0xc0) > 0x80) {
-			ch = (unsigned char)(ch << 1);
-			skip++;
-		}
-		j += skip;
-	}
-
-	char ch = buffer[j];
-	buffer[j] = ' ';
-
-	if (TRIM_TRAILING_SPACES) {
-		while (j >= 0 && buffer[j] == ' ')
-			j--;
-	}
-	buffer[j + 1] = 0;
-
-	if (bytesread == LENGTH(buffer)) {
+	if ((nl = strchr(raw, '\n'))) {
+		*nl = '\0';
+	} else if (bytesread == RAWLENGTH - 1) {
+		char ch = 0;
 		while (ch != '\n' && read(pipes[i][0], &ch, 1) == 1)
 			;
 	}
 
-	if (CLICKABLE_BLOCKS) {
-		if (bytesread > 1 && blocks[i].signal > 0) {
-			output[0] = (char)blocks[i].signal;
-			output++;
-		}
-	}
-
-	strcpy(output, buffer);
+	renderblock(i);
 	execlock &= ~(1u << i);
 }
 
@@ -687,6 +951,26 @@ warn(const char* fmt, ...)
 	if (fmt[0] && fmt[strlen(fmt) - 1] == ':')
 		fprintf(stderr, " %s", strerror(saved_errno));
 	fputc('\n', stderr);
+}
+
+static void
+xevents(void)
+{
+	XEvent ev;
+	int reload = 0;
+
+	while (XPending(dpy)) {
+		XNextEvent(dpy, &ev);
+		if (ev.type == PropertyNotify && ev.xproperty.atom == XA_RESOURCE_MANAGER)
+			reload = 1;
+	}
+
+	if (!reload)
+		return;
+
+	loadresources();
+	for (int i = 0; i < LENGTH(blocks); i++)
+		renderblock(i);
 }
 
 int

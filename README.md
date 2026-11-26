@@ -10,6 +10,9 @@ async, clickable implementation, with name based control built in.
 - **Clickable blocks**: with dwm patched for
   [statuscmd](https://dwm.suckless.org/patches/statuscmd/), `BLOCK_BUTTON` is
   set in the script's environment on click.
+- **Colours and icon style in one place**: blocks print plain fields, the
+  daemon colours them and picks icon or ASCII text, from `config.h` defaults
+  overridden by X resources. Changes made with `xrdb` apply instantly.
 - **Built-in CLI client**: update, restart, or list blocks by name, no
   separate control binary, no memorizing signal numbers.
 - **Shell completions**: bash, zsh, fish.
@@ -44,17 +47,47 @@ Installs the binary, man page, and shell completions (bash, zsh, fish).
 Blocks are defined in `config.h`:
 ```c
 const Block blocks[] = {
-	/*Command                  Update Interval   Update Signal */
-	{ "/path/to/script",       10,                10 },
+	/*Command                  Update Interval   Update Signal   Icons */
+	{ "/path/to/script",       10,                10,             1 },
 };
 ```
 - **Update interval**, in seconds. `0` disables automatic updates.
 - **Update signal**, an offset from `SIGRTMIN`. Must be unique per block. `0`
   makes the block unclickable and unreachable by name.
+- **Icons**, `1` to show the block's `rich` text, `0` for its `plain` text.
 
+Colour classes and their defaults live in the `colours` table. `CLR_FMT` and
+`CLR_NRM` set the escape written around coloured text (status2d by default).
 `CLICKABLE_BLOCKS`, `LEADING_DELIMITER`, `DELIMITER`, and
-`TRIM_TRAILING_SPACES` are also set here. Rebuild after any change; there is
-no runtime reload.
+`TRIM_TRAILING_SPACES` are also set here. Rebuild after editing `config.h`.
+
+### X resources
+
+Colours and icon style can be changed at runtime, without a rebuild:
+```
+statusblocks.clr_bat_crt: #F38BA8
+statusblocks.icon_battery: 0
+```
+The prefix is `XRES_PREFIX`. Each block's current colours are also exported
+to it as `BLOCK_CLR_<CLASS>`, e.g. `BLOCK_CLR_CAL=#F38BA8`; unset classes are
+left out.
+
+### Block output
+
+A block prints one line of tab-separated `key=value` fields:
+```
+class=bat_nrm<TAB>rich=<glyph><TAB>plain=B:87%
+```
+- `class` names an entry in `colours`; unknown or missing classes are
+  uncoloured.
+- `rich` is shown when the block's icon mode is on, `plain` when it is off.
+  If one is missing the other is used; if it is present but empty, nothing
+  is shown.
+- A new segment starts at each `class=` or repeated key, so one line can hold
+  several differently coloured runs.
+
+A line that doesn't start with one of these keys is shown as is, so plain
+scripts keep working. Output is cut to 70 visible characters.
 
 ## Usage
 
