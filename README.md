@@ -86,7 +86,9 @@ class=bat_nrm<TAB>rich=<glyph><TAB>plain=B:87%
 - A new segment starts at each `class=` or repeated key, so one line can hold
   several differently coloured runs.
 
-A line that doesn't start with one of these keys is shown as is, so plain
+A block whose chosen text is empty (or only spaces) is hidden, along with
+its delimiter, e.g. `rich=<TAB>plain=` for an updates block with nothing
+pending. A line that doesn't start with one of these keys is shown as is, so plain
 scripts keep working. Output is cut to 70 visible characters.
 
 ## Usage

@@ -701,7 +701,7 @@ renderblock(int i)
 			while (len && line[len - 1] == ' ')
 				len--;
 		appendtext(&out, &room, line, len, &count);
-		return;
+		goto done;
 	}
 
 	for (int j = 0; j < n; j++) {
@@ -749,6 +749,11 @@ renderblock(int i)
 			room -= strlen(CLR_NRM);
 		}
 	}
+
+done:
+	/* Nothing visible: drop the click byte too, so no delimiter is drawn. */
+	if (count == 0)
+		outputs[i][0] = '\0';
 }
 
 void
