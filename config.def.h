@@ -44,7 +44,7 @@ const Block blocks[] = {
 	{ BLOCK("kernel"),    0,                7,              1,      0 },
 	{ BLOCK("date"),      0,                6,              1,      1 },
 	{ BLOCK("time"),      0,                5,              1,      1 },
-	{ BLOCK("internet"),  5,                1,              1,      0 },
+	{ BLOCK("internet"),  0,                1,              1,      1 },
 	{ BLOCK("battery"),   0,                2,              1,      1 },
 	{ BLOCK("bluetooth"), 0,                15,             1,      1 },
 	{ BLOCK("power"),     0,                14,             1,      0 },
