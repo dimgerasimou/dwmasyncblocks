@@ -70,8 +70,9 @@ const Block blocks[] = {
 
 Colour classes and their defaults live in the `colours` table. `CLR_FMT` and
 `CLR_NRM` set the escape written around coloured text (status2d by default).
-`CLICKABLE_BLOCKS`, `LEADING_DELIMITER`, `DELIMITER`, and
-`TRIM_TRAILING_SPACES` are also set here. Rebuild after editing `config.h`.
+`CLICKABLE_BLOCKS`, `LEADING_DELIMITER`, `DELIMITER`, `STATUS_SUFFIX`
+(text appended after the last block) and `TRIM_TRAILING_SPACES` are also set
+here. Rebuild after editing `config.h`.
 
 ### X resources
 

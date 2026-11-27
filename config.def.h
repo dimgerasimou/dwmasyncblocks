@@ -3,6 +3,8 @@
 #define CLICKABLE_BLOCKS 0
 #define LEADING_DELIMITER 1
 #define DELIMITER "|"
+/* Appended after the last block, e.g. " " to keep it off the bar edge. */
+#define STATUS_SUFFIX ""
 #define TRIM_TRAILING_SPACES 1
 
 /* Colour escape; CLR_FMT gets one "#RRGGBB". Defaults target status2d. */

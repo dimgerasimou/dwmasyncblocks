@@ -178,7 +178,7 @@ static long long pdeadlines[LENGTH(blocks)];
 static unsigned int pbackoffs[LENGTH(blocks)];
 
 static char outputs[LENGTH(blocks)][CMDLENGTH * 4 + MAXSEGMENTS * 2 * ESCLENGTH + 2 + CLICKABLE_BLOCKS];
-static char statusbar[2][LENGTH(blocks) * (LENGTH(outputs[0]) - 1) + (LENGTH(blocks) - 1 + LEADING_DELIMITER) * (LENGTH(DELIMITER) - 1) + 1];
+static char statusbar[2][LENGTH(blocks) * (LENGTH(outputs[0]) - 1) + (LENGTH(blocks) - 1 + LEADING_DELIMITER) * (LENGTH(DELIMITER) - 1) + LENGTH(STATUS_SUFFIX)];
 static char blocknames[LENGTH(blocks)][CMDLENGTH];
 
 /* Copies whole UTF-8 characters until CMDLENGTH visible ones have been
@@ -453,6 +453,8 @@ getstatus(char* str, char* strold)
 		}
 		strcat(str, outputs[i]);
 	}
+	if (*str)
+		strcat(str, STATUS_SUFFIX);
 	return strcmp(str, strold);
 }
 
