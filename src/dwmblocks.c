@@ -5,7 +5,9 @@
  * multiplexed through a single epoll instance alongside a signalfd catching
  * SIGALRM (the block timer), SIGUSR1 (update all) and each block's
  * SIGRTMIN+signal (update one, click), and the X connection, which reports
- * RESOURCE_MANAGER changes so colours and icon modes follow xrdb live.
+ * RESOURCE_MANAGER changes so colours and icon modes follow xrdb live, a
+ * restart timer and the stdout of persistent blocks, which run for the
+ * daemon's lifetime and print a line whenever their state changes.
  * Blocks print tab-separated class=/rich=/plain= fields; the daemon picks the
  * variant, colours it and builds the status line. Any other invocation (--update, --all,
  * --restart, --list) instead acts as a client: it finds the running daemon's
@@ -29,7 +31,10 @@
 #include <string.h>
 #include <sys/epoll.h>
 #include <sys/file.h>
+#include <sys/prctl.h>
 #include <sys/signalfd.h>
+#include <sys/timerfd.h>
+#include <time.h>
 #include <ctype.h>
 #include <unistd.h>
 #include <X11/Xatom.h>
@@ -45,6 +50,8 @@
 #define HEXLENGTH    8
 #define ESCLENGTH    64
 #define MAXSEGMENTS  8
+#define BACKOFFMAX   60
+#define STABLETIME   30
 #define LENGTH(X)    (int)(sizeof(X) / sizeof(X[0]))
 #define MAX(a, b)    (a > b ? a : b)
 
@@ -53,6 +60,7 @@ typedef const struct {
 	const unsigned int interval;
 	const unsigned int signal;
 	const unsigned int icons;
+	const unsigned int persist;
 } Block;
 
 typedef const struct {
@@ -121,6 +129,11 @@ void setroot(void);
 void setupsignals(void);
 static int setupX(void);
 void signalhandler(void);
+static void persistdied(int i);
+static void persistrestart(void);
+static void persisttimer(void);
+static void readpersist(int i);
+static void spawnpersist(int i);
 void statusloop(void);
 static void xevents(void);
 void termhandler(int signum);
@@ -152,6 +165,17 @@ static char hexes[LENGTH(colours)][HEXLENGTH];
 static unsigned int icons[LENGTH(blocks)];
 static char raws[LENGTH(blocks)][RAWLENGTH];
 static unsigned int classwarned = 0;
+
+/* Persistent blocks; event ids after the block pipes, signalfd, X and timer. */
+#define PERSISTID(i) ((uint32_t)(LENGTH(blocks) + 3 + (i)))
+static int timerFD = -1;
+static int pfds[LENGTH(blocks)];
+static pid_t ppids[LENGTH(blocks)];
+static char pbufs[LENGTH(blocks)][RAWLENGTH];
+static size_t plens[LENGTH(blocks)];
+static long long pstarts[LENGTH(blocks)];
+static long long pdeadlines[LENGTH(blocks)];
+static unsigned int pbackoffs[LENGTH(blocks)];
 
 static char outputs[LENGTH(blocks)][CMDLENGTH * 4 + MAXSEGMENTS * 2 * ESCLENGTH + 2 + CLICKABLE_BLOCKS];
 static char statusbar[2][LENGTH(blocks) * (LENGTH(outputs[0]) - 1) + (LENGTH(blocks) - 1 + LEADING_DELIMITER) * (LENGTH(DELIMITER) - 1) + 1];
@@ -278,6 +302,11 @@ void
 execblock(int i, const char* button)
 {
 	pid_t pid;
+
+	/* A plain update (no button, or "0" from pkill/--update) would start a
+	 * second copy; the running one already reports every change. */
+	if (blocks[i].persist && (!button || !strcmp(button, "0")))
+		return;
 	if (execlock & (1u << i))
 		return;
 	execlock |= 1u << i;
@@ -472,6 +501,16 @@ initialize(void)
 	XSelectInput(dpy, root, PropertyChangeMask);
 	event.data.u32 = (uint32_t)LENGTH(blocks) + 1;
 	epoll_ctl(epollfd, EPOLL_CTL_ADD, ConnectionNumber(dpy), &event);
+
+	timerFD = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC | TFD_NONBLOCK);
+	event.data.u32 = (uint32_t)LENGTH(blocks) + 2;
+	epoll_ctl(epollfd, EPOLL_CTL_ADD, timerFD, &event);
+
+	for (int i = 0; i < LENGTH(blocks); i++) {
+		pfds[i] = -1;
+		if (blocks[i].persist)
+			spawnpersist(i);
+	}
 
 	raise(SIGALRM);
 }
@@ -676,6 +715,102 @@ parsesegments(char* line, Segment* segs)
 	return n;
 }
 
+/* Monotonic milliseconds. */
+static long long
+now(void)
+{
+	struct timespec ts;
+
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return (long long)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+}
+
+static void
+persistdied(int i)
+{
+	epoll_ctl(epollfd, EPOLL_CTL_DEL, pfds[i], NULL);
+	close(pfds[i]);
+	pfds[i] = -1;
+	kill(-ppids[i], SIGTERM);
+
+	raws[i][0] = '\0';
+	renderblock(i);
+
+	if (now() - pstarts[i] >= STABLETIME * 1000LL || !pbackoffs[i])
+		pbackoffs[i] = 1;
+	else
+		pbackoffs[i] = pbackoffs[i] * 2 > BACKOFFMAX ? BACKOFFMAX : pbackoffs[i] * 2;
+
+	warn("block '%s' exited, restarting in %us.", blocknames[i], pbackoffs[i]);
+	pdeadlines[i] = now() + pbackoffs[i] * 1000LL;
+	persisttimer();
+}
+
+static void
+persistrestart(void)
+{
+	uint64_t expirations;
+	long long t = now();
+
+	if (read(timerFD, &expirations, sizeof(expirations)) < 0 && errno == EAGAIN)
+		return;
+
+	for (int i = 0; i < LENGTH(blocks); i++) {
+		if (pdeadlines[i] && pdeadlines[i] <= t) {
+			pdeadlines[i] = 0;
+			spawnpersist(i);
+		}
+	}
+	persisttimer();
+}
+
+/* Arms the timer for the earliest pending restart, or disarms it. */
+static void
+persisttimer(void)
+{
+	struct itimerspec its = {0};
+	long long next = 0;
+
+	for (int i = 0; i < LENGTH(blocks); i++)
+		if (pdeadlines[i] && (!next || pdeadlines[i] < next))
+			next = pdeadlines[i];
+
+	its.it_value.tv_sec = (time_t)(next / 1000);
+	its.it_value.tv_nsec = (long)(next % 1000) * 1000000;
+
+	timerfd_settime(timerFD, TFD_TIMER_ABSTIME, &its, NULL);
+}
+
+/* Keeps the last complete line; a partial one waits for the next read. */
+static void
+readpersist(int i)
+{
+	ssize_t n;
+	int got = 0;
+
+	while ((n = read(pfds[i], pbufs[i] + plens[i], RAWLENGTH - 1 - plens[i])) > 0) {
+		char* nl;
+
+		plens[i] += (size_t)n;
+		while ((nl = memchr(pbufs[i], '\n', plens[i]))) {
+			size_t len = (size_t)(nl - pbufs[i]);
+
+			memcpy(raws[i], pbufs[i], len);
+			raws[i][len] = '\0';
+			plens[i] -= len + 1;
+			memmove(pbufs[i], nl + 1, plens[i]);
+			got = 1;
+		}
+		if (plens[i] == RAWLENGTH - 1)
+			plens[i] = 0;
+	}
+
+	if (got)
+		renderblock(i);
+	if (n == 0 || (n < 0 && errno != EAGAIN && errno != EINTR))
+		persistdied(i);
+}
+
 static void
 renderblock(int i)
 {
@@ -842,10 +977,61 @@ signalhandler(void)
 	}
 }
 
+static void
+spawnpersist(int i)
+{
+	char cmd[RAWLENGTH];
+	int fds[2];
+	pid_t pid;
+
+	plens[i] = 0;
+	pstarts[i] = now();
+
+	if (pipe2(fds, O_CLOEXEC) < 0) {
+		warn("spawnpersist: pipe2() failed for block '%s':", blocknames[i]);
+		pdeadlines[i] = now() + BACKOFFMAX * 1000LL;
+		persisttimer();
+		return;
+	}
+
+	pid = fork();
+	if (pid < 0) {
+		warn("spawnpersist: fork() failed for block '%s':", blocknames[i]);
+		closepipe(fds);
+		pdeadlines[i] = now() + BACKOFFMAX * 1000LL;
+		persisttimer();
+		return;
+	} else if (pid == 0) {
+		sigset_t none;
+
+		setpgid(0, 0);
+		/* "exec" so the death signal lands on the block, not on sh. */
+		prctl(PR_SET_PDEATHSIG, SIGTERM);
+		sigemptyset(&none);
+		sigprocmask(SIG_SETMASK, &none, NULL);
+
+		dup2(fds[1], STDOUT_FILENO);
+		setenv("BLOCK_PERSIST", "1", 1);
+		exportcolours();
+		snprintf(cmd, sizeof(cmd), "exec %s", blocks[i].command);
+		execl("/bin/sh", "sh", "-c", cmd, (char*)NULL);
+		_exit(EXIT_FAILURE);
+	}
+
+	setpgid(pid, pid);
+	close(fds[1]);
+	fcntl(fds[0], F_SETFL, O_NONBLOCK);
+	pfds[i] = fds[0];
+	ppids[i] = pid;
+
+	event.data.u32 = PERSISTID(i);
+	epoll_ctl(epollfd, EPOLL_CTL_ADD, fds[0], &event);
+}
+
 void
 statusloop(void)
 {
-	struct epoll_event events[LENGTH(blocks) + 2];
+	struct epoll_event events[2 * LENGTH(blocks) + 3];
 
 	while (proccesscontinue) {
 		int eventCount = epoll_wait(epollfd, events, LENGTH(events), -1);
@@ -855,6 +1041,10 @@ statusloop(void)
 				updateblock(id);
 			else if (id == LENGTH(blocks))
 				signalhandler();
+			else if (id == LENGTH(blocks) + 2)
+				persistrestart();
+			else if (id >= LENGTH(blocks) + 3)
+				readpersist(id - LENGTH(blocks) - 3);
 		}
 
 		/* Every pass, not only on fd wakeups: Xlib may already hold
@@ -876,6 +1066,14 @@ termhandler(int signum)
 void
 termination(void)
 {
+	for (int i = 0; i < LENGTH(blocks); i++) {
+		if (pfds[i] < 0)
+			continue;
+		kill(-ppids[i], SIGTERM);
+		close(pfds[i]);
+	}
+	if (timerFD >= 0)
+		close(timerFD);
 	XCloseDisplay(dpy);
 	close(epollfd);
 	close(signalFD);
@@ -890,8 +1088,19 @@ void
 updateblock(int i)
 {
 	char* raw = raws[i];
-	ssize_t bytesread = read(pipes[i][0], raw, RAWLENGTH - 1);
+	ssize_t bytesread;
 	char* nl;
+
+	if (blocks[i].persist) {
+		char discard[RAWLENGTH];
+
+		if (read(pipes[i][0], discard, sizeof(discard)) < 0)
+			warn("updateblock: read() failed for block '%s':", blocknames[i]);
+		execlock &= ~(1u << i);
+		return;
+	}
+
+	bytesread = read(pipes[i][0], raw, RAWLENGTH - 1);
 
 	if (bytesread < 0)
 		bytesread = 0;

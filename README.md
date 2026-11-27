@@ -10,6 +10,9 @@ async, clickable implementation, with name based control built in.
 - **Clickable blocks**: with dwm patched for
   [statuscmd](https://dwm.suckless.org/patches/statuscmd/), `BLOCK_BUTTON` is
   set in the script's environment on click.
+- **Persistent blocks**: a block can run for the daemon's whole lifetime and
+  print a line whenever its state changes, so it updates instantly without
+  polling or signals. It is restarted with backoff if it exits.
 - **Colours and icon style in one place**: blocks print plain fields, the
   daemon colours them and picks icon or ASCII text, from `config.h` defaults
   overridden by X resources. Changes made with `xrdb` apply instantly.
@@ -47,14 +50,23 @@ Installs the binary, man page, and shell completions (bash, zsh, fish).
 Blocks are defined in `config.h`:
 ```c
 const Block blocks[] = {
-	/*Command                  Update Interval   Update Signal   Icons */
-	{ "/path/to/script",       10,                10,             1 },
+	/*Command                  Update Interval   Update Signal   Icons   Persist */
+	{ "/path/to/script",       10,                10,             1,      0 },
 };
 ```
 - **Update interval**, in seconds. `0` disables automatic updates.
 - **Update signal**, an offset from `SIGRTMIN`. Must be unique per block. `0`
   makes the block unclickable and unreachable by name.
 - **Icons**, `1` to show the block's `rich` text, `0` for its `plain` text.
+- **Persist**, `1` to run the block once, with `BLOCK_PERSIST=1`, and keep it
+  running. Each line it prints replaces the block's text. Its interval is
+  ignored and updates by signal, `--update` or `--all` don't re-run it, but
+  clicks still run the command once with `BLOCK_BUTTON` set; that run's
+  output is discarded, since the running copy reports the change itself. If
+  it exits, the block is blanked and the command restarted after 1s,
+  doubling up to 60s while it keeps failing within 30s of starting. It gets
+  `SIGTERM` when dwmblocks exits, and dies with it even if dwmblocks is
+  killed, provided the command is a single program (it is run with `exec`).
 
 Colour classes and their defaults live in the `colours` table. `CLR_FMT` and
 `CLR_NRM` set the escape written around coloured text (status2d by default).

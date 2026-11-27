@@ -36,16 +36,16 @@ static const Colour colours[] = {
 };
 
 const Block blocks[] = {
-	/*Command             Update Interval   Update Signal   Icons */
-	{ BLOCK("volume"),    0,                10,             1 },
-	{ BLOCK("memory"),    6,                12,             1 },
-	{ BLOCK("keyboard"),  0,                3,              1 },
-	{ BLOCK("updates"),   360,              4,              1 },
-	{ BLOCK("kernel"),    0,                7,              1 },
-	{ BLOCK("date"),      300,              6,              1 },
-	{ BLOCK("time"),      1,                5,              1 },
-	{ BLOCK("internet"),  5,                1,              1 },
-	{ BLOCK("battery"),   5,                2,              1 },
-	{ BLOCK("bluetooth"), 5,                15,             1 },
-	{ BLOCK("power"),     0,                14,             1 },
+	/*Command             Update Interval   Update Signal   Icons   Persist */
+	{ BLOCK("volume"),    0,                10,             1,      1 },
+	{ BLOCK("memory"),    6,                12,             1,      0 },
+	{ BLOCK("keyboard"),  0,                3,              1,      1 },
+	{ BLOCK("updates"),   360,              4,              1,      0 },
+	{ BLOCK("kernel"),    0,                7,              1,      0 },
+	{ BLOCK("date"),      300,              6,              1,      0 },
+	{ BLOCK("time"),      0,                5,              1,      1 },
+	{ BLOCK("internet"),  5,                1,              1,      0 },
+	{ BLOCK("battery"),   5,                2,              1,      0 },
+	{ BLOCK("bluetooth"), 5,                15,             1,      0 },
+	{ BLOCK("power"),     0,                14,             1,      0 },
 };

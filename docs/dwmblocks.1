@@ -75,6 +75,11 @@ these keys is shown unchanged.
 .B BLOCK_BUTTON
 Set to the clicked button.
 .TP
+.B BLOCK_PERSIST
+Set to 1 for a block run persistently. The block should keep running and
+print a line on every change; dwmblocks restarts it, with backoff, if it
+exits.
+.TP
 .B BLOCK_CLR_\fICLASS\fR
 Set to each colour class's current
 .B #RRGGBB
